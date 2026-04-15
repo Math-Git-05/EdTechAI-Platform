@@ -695,7 +695,7 @@ def _ensure_ai_predictions_columns() -> None:
                     """
                 )
             )
-        else:
+        elif dialect_name == "sqlite":
             db.session.execute(
                 text(
                     """
@@ -714,10 +714,34 @@ def _ensure_ai_predictions_columns() -> None:
                     """
                 )
             )
+        else:
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE ai_predictions (
+                        prediction_id SERIAL PRIMARY KEY,
+                        student_id INTEGER NOT NULL,
+                        response_id INTEGER,
+                        recommended_career VARCHAR(120),
+                        prob_informatica FLOAT,
+                        prob_enfermeria FLOAT,
+                        prob_administracion FLOAT,
+                        prob_comercio FLOAT,
+                        model_version VARCHAR(40),
+                        predicted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
         db.session.commit()
         return
 
-    datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
+    if dialect_name == "mssql":
+        datetime_type = "DATETIME2"
+    elif dialect_name == "postgresql":
+        datetime_type = "TIMESTAMP"
+    else:
+        datetime_type = "DATETIME"
     int_type = "INT" if dialect_name == "mssql" else "INTEGER"
     text_type = "NVARCHAR(120)" if dialect_name == "mssql" else "VARCHAR(120)"
     short_text_type = "NVARCHAR(40)" if dialect_name == "mssql" else "VARCHAR(40)"
@@ -791,7 +815,7 @@ def _ensure_teacher_observations_columns() -> None:
                     """
                 )
             )
-        else:
+        elif dialect_name == "sqlite":
             db.session.execute(
                 text(
                     """
@@ -808,10 +832,32 @@ def _ensure_teacher_observations_columns() -> None:
                     """
                 )
             )
+        else:
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE teacher_observations (
+                        student_id INTEGER PRIMARY KEY,
+                        teacher_id INTEGER,
+                        teacher_comment TEXT,
+                        observation TEXT,
+                        observed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        teamwork_score FLOAT,
+                        discipline_score FLOAT,
+                        motivation_score FLOAT
+                    )
+                    """
+                )
+            )
         db.session.commit()
         return
 
-    datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
+    if dialect_name == "mssql":
+        datetime_type = "DATETIME2"
+    elif dialect_name == "postgresql":
+        datetime_type = "TIMESTAMP"
+    else:
+        datetime_type = "DATETIME"
     int_type = "INT" if dialect_name == "mssql" else "INTEGER"
     long_text_type = "NVARCHAR(MAX)" if dialect_name == "mssql" else "TEXT"
     add_column_prefix = (
