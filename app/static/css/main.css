@@ -114,13 +114,25 @@ h1,h2,h3,h4 { font-family: var(--font-head); font-weight: 700; line-height: 1.25
     align-items: center;
     gap: 8px;
 }
-.navbar-brand .brand-accent { color: var(--accent-h); }
-.navbar-brand .brand-dot {
-    width: 7px; height: 7px;
-    background: var(--accent);
-    border-radius: 50%;
-    display: inline-block;
+.navbar-brand .brand-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-h);
 }
+.navbar-brand .brand-icon svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+.navbar-brand .brand-name {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+.navbar-brand .brand-accent { color: var(--accent-h); }
 .navbar-nav {
     display: flex;
     align-items: center;

@@ -65,8 +65,8 @@ class Config:
     MAIL_PASSWORD = _env_first("MAIL_PASSWORD", "SMTP_PASS")
     MAIL_FROM = _env_first("MAIL_FROM", "SMTP_FROM", default=MAIL_USERNAME or "noreply@edtech.local")
     MAIL_FROM_NOREPLY = _env_first("MAIL_FROM_NOREPLY", "SMTP_FROM_NOREPLY", default=MAIL_FROM)
-    MAIL_FROM_SUPPORT = _env_first("MAIL_FROM_SUPPORT", "SMTP_FROM_SUPPORT", default=MAIL_FROM)
-    MAIL_REPLY_TO_SUPPORT = _env_first("MAIL_REPLY_TO_SUPPORT", default=MAIL_FROM_SUPPORT)
+    MAIL_FROM_SUPPORT = _env_first("MAIL_FROM_SUPPORT", "SMTP_FROM_SUPPORT")
+    MAIL_REPLY_TO_SUPPORT = _env_first("MAIL_REPLY_TO_SUPPORT")
     MAIL_BRAND_NAME = _env_first("MAIL_BRAND_NAME", default="EdTech AI")
 
     # URL base para links de verificacion y recuperacion

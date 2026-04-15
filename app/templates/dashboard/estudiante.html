@@ -1,5 +1,5 @@
 {% extends "layout/base.html" %}
-{% block title %}Dashboard Estudiante - EdTech{% endblock %}
+{% block title %}Dashboard Estudiante - EdTech AI{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -81,19 +81,6 @@
         <a href="{{ url_for('resultado.index') }}" class="btn btn-secondary btn-sm">Ver desglose</a>
       {% endif %}
     </div>
-
-    <div class="dashboard-card">
-      <div class="card-header adm">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-          <circle cx="16" cy="10" r="4" stroke="#7c3aed" stroke-width="2"/>
-          <path d="M3 24c0-5 6-8 13-8s13 3 13 8" stroke="#7c3aed" stroke-width="2" fill="none"/>
-        </svg>
-      </div>
-      <h3>Técnicos Disponibles</h3>
-      <p>Conoce los 4 técnicos para los que puedes orientarte</p>
-      <a href="#" class="btn btn-secondary btn-sm">Explorar técnicos</a>
-    </div>
-
     <div class="dashboard-card">
       <div class="card-header com">
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
@@ -120,31 +107,5 @@
       </div>
     </div>
   {% endif %}
-
-  <div class="tecnicos-overview">
-    <h2>Técnicos Disponibles</h2>
-    <div class="tecnicos-grid">
-      <div class="tecnico-item">
-        <div class="tecnico-badge inf">1</div>
-        <h4>Informática</h4>
-        <p>Desarrollo de software, análisis de sistemas y programación.</p>
-      </div>
-      <div class="tecnico-item">
-        <div class="tecnico-badge enf">2</div>
-        <h4>Enfermeria</h4>
-        <p>Atención de salud, cuidado del paciente y bienestar.</p>
-      </div>
-      <div class="tecnico-item">
-        <div class="tecnico-badge adm">3</div>
-        <h4>Administración</h4>
-        <p>Gestión empresarial, organización y recursos humanos.</p>
-      </div>
-      <div class="tecnico-item">
-        <div class="tecnico-badge com">4</div>
-        <h4>Comercio</h4>
-        <p>Ventas, marketing, negociación y servicio al cliente.</p>
-      </div>
-    </div>
-  </div>
 </div>
 {% endblock %}

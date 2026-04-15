@@ -31,11 +31,40 @@ def _sender_noreply() -> str | None:
 
 
 def _sender_support() -> str | None:
-    return current_app.config.get("MAIL_FROM_SUPPORT") or current_app.config.get("MAIL_FROM")
+    explicit_support = _extract_email_address(current_app.config.get("MAIL_FROM_SUPPORT"))
+    if explicit_support:
+        return explicit_support
+    return _default_support_email()
+
+
+def _default_support_email() -> str:
+    from_candidates = [
+        current_app.config.get("MAIL_FROM_SUPPORT"),
+        current_app.config.get("MAIL_REPLY_TO_SUPPORT"),
+        current_app.config.get("MAIL_FROM_NOREPLY"),
+        current_app.config.get("MAIL_FROM"),
+    ]
+    for raw in from_candidates:
+        address = _extract_email_address(raw)
+        if "@" not in address:
+            continue
+        _, domain = address.split("@", 1)
+        domain = domain.strip().lower()
+        if domain:
+            return f"support@{domain}"
+    return "support@edtech.local"
 
 
 def _reply_to_support() -> str | None:
-    return current_app.config.get("MAIL_REPLY_TO_SUPPORT") or _sender_support()
+    explicit_reply_to = _extract_email_address(current_app.config.get("MAIL_REPLY_TO_SUPPORT"))
+    if explicit_reply_to:
+        return explicit_reply_to
+
+    explicit_support = _extract_email_address(_sender_support())
+    if explicit_support:
+        return explicit_support
+
+    return _default_support_email()
 
 
 def _extract_email_address(raw_value: str | None) -> str:
@@ -46,7 +75,7 @@ def _extract_email_address(raw_value: str | None) -> str:
 
 
 def _support_contact() -> str:
-    return _extract_email_address(_reply_to_support()) or "support@edtech.local"
+    return _extract_email_address(_reply_to_support()) or _default_support_email()
 
 
 def _accent_color(kind: str) -> str:
