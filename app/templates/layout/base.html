@@ -19,6 +19,7 @@
     {% if current_user.is_authenticated %}
     <div class="navbar-nav">
       <span class="role-badge role-{{ current_user.role }}">{{ current_user.role }}</span>
+      <a href="{{ url_for('main.explorar_carreras') }}" class="nav-link">Explorar carreras</a>
       <a href="{{ url_for('dashboard.index') }}" class="nav-link">Mi Dashboard</a>
 
       <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">
@@ -98,6 +99,7 @@
           </svg>
         </span>
       </button>
+      <a href="{{ url_for('main.explorar_carreras') }}" class="nav-link">Explorar carreras</a>
       <a href="{{ url_for('auth.login') }}" class="nav-link">Ingresar</a>
       <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm">Registrarse</a>
     </div>

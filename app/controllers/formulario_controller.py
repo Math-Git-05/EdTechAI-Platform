@@ -3,6 +3,8 @@ from flask_login import current_user, login_required
 
 from app import db
 from app.models.evaluacion import Evaluacion
+from app.services.email_service import send_email
+from app.services.email_template_service import build_evaluation_results_email
 from app.services.evaluacion_service import (
     best_track_from_evaluacion,
     has_any_score,
@@ -44,6 +46,37 @@ def _sync_ai_prediction_safe(*, student, evaluacion) -> str | None:
     except Exception:
         db.session.rollback()
         return "No se pudo sincronizar ai_predictions para esta evaluacion."
+
+
+def _build_external_url(endpoint: str, **kwargs) -> str:
+    base = current_app.config.get("APP_BASE_URL", "").rstrip("/")
+    relative = url_for(endpoint, **kwargs)
+    if base:
+        return f"{base}{relative}"
+    return url_for(endpoint, _external=True, **kwargs)
+
+
+def _send_result_email_safe(*, student, evaluacion) -> None:
+    try:
+        recommendation = build_recommendation_for_student(student=student, evaluacion=evaluacion)
+        payload = build_evaluation_results_email(
+            user_name=student.nombre,
+            dashboard_url=_build_external_url("resultado.index"),
+            recommendation=recommendation,
+        )
+        send_email(
+            student.email,
+            payload.subject,
+            payload.html,
+            payload.text,
+            sender=payload.sender,
+            reply_to=payload.reply_to,
+        )
+    except Exception:
+        current_app.logger.exception(
+            "No se pudo enviar correo de resultados para estudiante_id=%s",
+            getattr(student, "id", None),
+        )
 
 
 @formulario_bp.route('/')
@@ -260,6 +293,7 @@ def marcar_completada():
 
     response_payload = {"ok": True, "evaluacion_id": evaluacion.id}
     prediction_warning = _sync_ai_prediction_safe(student=current_user, evaluacion=evaluacion)
+    _send_result_email_safe(student=current_user, evaluacion=evaluacion)
     if tally_fetch_error:
         response_payload["tally_sync_warning"] = tally_fetch_error
     if prediction_warning:

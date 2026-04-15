@@ -1,0 +1,387 @@
+{% extends "layout/base.html" %}
+{% block title %}Explorar Carreras - EdTech AI{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/explorar_carreras.css') }}">
+{% endblock %}
+
+{% block content %}
+{% if current_user.is_authenticated and current_user.role == 'estudiante' %}
+  {% set evaluacion_url = url_for('formulario.index') %}
+{% elif current_user.is_authenticated %}
+  {% set evaluacion_url = url_for('dashboard.index') %}
+{% else %}
+  {% set evaluacion_url = url_for('auth.register') %}
+{% endif %}
+
+<div class="careers-page">
+  <section class="careers-hero">
+    <div class="careers-hero-content">
+      <span class="careers-hero-tag">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12h18"></path><path d="M12 3v18"></path>
+        </svg>
+        Oferta académica ITSC
+      </span>
+      <h1>Explora carreras técnicas y encuentra tu mejor camino profesional</h1>
+      <p>
+        Esta vista te permite conocer de forma rápida el enfoque de cada técnico, materias clave y salidas laborales
+        antes de tomar la evaluación vocacional.
+      </p>
+    </div>
+    <div class="careers-stats">
+      <div class="careers-stat"><strong>4</strong><span>Carreras técnicas activas</span></div>
+      <div class="careers-stat"><strong>2 años</strong><span>Duración estimada del programa</span></div>
+      <div class="careers-stat"><strong>Enfoque práctico</strong><span>Competencias reales para el mercado laboral</span></div>
+      <div class="careers-stat"><strong>Guía con IA</strong><span>Recomendación personalizada por perfil</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="careers-toolbar" aria-label="Filtrar carreras">
+      <button type="button" class="is-active" data-filter="all">Todas</button>
+      <button type="button" data-filter="inf">Informática</button>
+      <button type="button" data-filter="enf">Enfermería</button>
+      <button type="button" data-filter="com">Comercio</button>
+      <button type="button" data-filter="adm">Administración</button>
+    </div>
+
+    <div class="careers-grid" id="careers-grid">
+      <article class="career-card area-inf" data-area="inf" data-key="inf">
+        <div class="career-cover">
+          <img src="https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80" alt="Laboratorio de informática" loading="lazy">
+          <span class="career-badge">Tecnología</span>
+        </div>
+        <div class="career-body">
+          <h3>Técnico en Informática</h3>
+          <p>Aprende soporte, redes, desarrollo y seguridad informática para entornos empresariales modernos.</p>
+          <div class="career-meta">
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+              2 años
+            </span>
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 10v6M2 10v6"></path><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"></path></svg>
+              Presencial
+            </span>
+          </div>
+          <span class="career-list-label">Áreas clave</span>
+          <ul class="career-list">
+            <li><span class="career-list-dot"></span>Redes y telecomunicaciones</li>
+            <li><span class="career-list-dot"></span>Programación y bases de datos</li>
+            <li><span class="career-list-dot"></span>Ciberseguridad y soporte</li>
+          </ul>
+          <button type="button" class="career-action">Ver detalles</button>
+        </div>
+      </article>
+
+      <article class="career-card area-enf" data-area="enf" data-key="enf">
+        <div class="career-cover">
+          <img src="https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1200&q=80" alt="Profesional de enfermería" loading="lazy">
+          <span class="career-badge">Salud</span>
+        </div>
+        <div class="career-body">
+          <h3>Técnico en Enfermería</h3>
+          <p>Desarrolla competencias clínicas para apoyar equipos médicos y brindar atención de calidad al paciente.</p>
+          <div class="career-meta">
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+              2 años
+            </span>
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M12 3v18"></path></svg>
+              Prácticas clínicas
+            </span>
+          </div>
+          <span class="career-list-label">Áreas clave</span>
+          <ul class="career-list">
+            <li><span class="career-list-dot"></span>Cuidados básicos de salud</li>
+            <li><span class="career-list-dot"></span>Farmacología inicial</li>
+            <li><span class="career-list-dot"></span>Primeros auxilios y emergencias</li>
+          </ul>
+          <button type="button" class="career-action">Ver detalles</button>
+        </div>
+      </article>
+
+      <article class="career-card area-com" data-area="com" data-key="com">
+        <div class="career-cover">
+          <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1200&q=80" alt="Estrategia comercial y marketing" loading="lazy">
+          <span class="career-badge">Negocios</span>
+        </div>
+        <div class="career-body">
+          <h3>Técnico en Comercio y Mercadeo</h3>
+          <p>Fortalece habilidades de ventas, estrategia comercial, marketing digital y atención al cliente.</p>
+          <div class="career-meta">
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+              2 años
+            </span>
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"></path><path d="M14 7h7v7"></path></svg>
+              Marketing digital
+            </span>
+          </div>
+          <span class="career-list-label">Áreas clave</span>
+          <ul class="career-list">
+            <li><span class="career-list-dot"></span>Estrategias de ventas</li>
+            <li><span class="career-list-dot"></span>Publicidad y redes sociales</li>
+            <li><span class="career-list-dot"></span>Análisis de mercado</li>
+          </ul>
+          <button type="button" class="career-action">Ver detalles</button>
+        </div>
+      </article>
+
+      <article class="career-card area-adm" data-area="adm" data-key="adm">
+        <div class="career-cover">
+          <img src="https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1200&q=80" alt="Gestión administrativa y tributaria" loading="lazy">
+          <span class="career-badge">Gestión pública</span>
+        </div>
+        <div class="career-body">
+          <h3>Técnico en Administración Pública y Tributaria</h3>
+          <p>Prepárate para operar procesos administrativos y fiscales en instituciones públicas y privadas.</p>
+          <div class="career-meta">
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4M8 2v4M3 10h18"></path></svg>
+              2 años
+            </span>
+            <span>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"></path><path d="M5 21V7l7-4 7 4v14"></path><path d="M9 10h6M9 14h6"></path></svg>
+              Sector público y fiscal
+            </span>
+          </div>
+          <span class="career-list-label">Áreas clave</span>
+          <ul class="career-list">
+            <li><span class="career-list-dot"></span>Derecho administrativo</li>
+            <li><span class="career-list-dot"></span>Tributación y fiscalidad</li>
+            <li><span class="career-list-dot"></span>Contabilidad gubernamental</li>
+          </ul>
+          <button type="button" class="career-action">Ver detalles</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="careers-cta">
+    <h2>¿Quieres saber cuál carrera encaja mejor contigo?</h2>
+    <p>Completa la evaluación vocacional para recibir una recomendación personalizada según tu perfil académico e intereses.</p>
+    <div class="careers-cta-actions">
+      <a class="is-primary" href="{{ evaluacion_url }}">Iniciar evaluación</a>
+      <a class="is-secondary" href="{{ url_for('main.landing') }}">Conocer la plataforma</a>
+    </div>
+  </section>
+</div>
+
+<div id="career-modal-backdrop" class="career-modal-backdrop" aria-hidden="true">
+  <div class="career-modal" role="dialog" aria-modal="true" aria-labelledby="career-modal-title">
+    <div class="career-modal-cover">
+      <img id="career-modal-image" src="" alt="">
+      <button id="career-modal-close" type="button" class="career-modal-close" aria-label="Cerrar">×</button>
+    </div>
+    <div class="career-modal-body">
+      <span id="career-modal-badge" class="career-modal-badge"></span>
+      <h3 id="career-modal-title"></h3>
+      <p id="career-modal-description"></p>
+      <div id="career-modal-meta" class="career-modal-meta"></div>
+      <div class="career-modal-columns">
+        <div class="career-modal-section">
+          <strong>Materias del programa</strong>
+          <ul id="career-modal-subjects"></ul>
+        </div>
+        <div class="career-modal-section">
+          <strong>Campo laboral</strong>
+          <ul id="career-modal-jobs"></ul>
+        </div>
+      </div>
+      <button id="career-modal-action" type="button" class="career-modal-action">Iniciar evaluación vocacional</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    const catalog = {
+      inf: {
+        area: "inf",
+        badge: "Tecnología",
+        badgeStyle: "background:#dbeafe;color:#1e3a8a;",
+        title: "Técnico en Informática",
+        description:
+          "Forma perfiles con enfoque en infraestructura tecnológica, soporte de plataformas, desarrollo y ciberseguridad aplicada.",
+        image: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1400&q=80",
+        meta: ["2 años", "Modalidad presencial", "Certificación técnica"],
+        subjects: [
+          "Redes y telecomunicaciones",
+          "Sistemas operativos",
+          "Programación y bases de datos",
+          "Soporte técnico",
+          "Ciberseguridad aplicada",
+          "Infraestructura cloud inicial"
+        ],
+        jobs: [
+          "Soporte IT",
+          "Asistente de redes",
+          "Técnico de mantenimiento",
+          "Auxiliar de seguridad informática",
+          "Asistente de desarrollo"
+        ],
+        actionColor: "#2563eb"
+      },
+      enf: {
+        area: "enf",
+        badge: "Salud",
+        badgeStyle: "background:#d1fae5;color:#065f46;",
+        title: "Técnico en Enfermería",
+        description:
+          "Desarrolla competencias clínicas y humanas para apoyar procesos de cuidado, prevención y seguimiento de pacientes.",
+        image: "https://images.unsplash.com/photo-1579684385127-1ef15d508118?auto=format&fit=crop&w=1400&q=80",
+        meta: ["2 años", "Prácticas clínicas", "Certificación técnica"],
+        subjects: [
+          "Anatomía y fisiología",
+          "Enfermería básica",
+          "Farmacología",
+          "Primeros auxilios",
+          "Control de infecciones",
+          "Atención comunitaria"
+        ],
+        jobs: [
+          "Auxiliar de enfermería",
+          "Asistente en clínica",
+          "Apoyo en atención primaria",
+          "Soporte en programas de salud"
+        ],
+        actionColor: "#059669"
+      },
+      com: {
+        area: "com",
+        badge: "Negocios",
+        badgeStyle: "background:#fef3c7;color:#854d0e;",
+        title: "Técnico en Comercio y Mercadeo",
+        description:
+          "Entrena en estrategia comercial, marketing digital, investigación de mercado y operación de canales de venta.",
+        image: "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1400&q=80",
+        meta: ["2 años", "Enfoque práctico", "Certificación técnica"],
+        subjects: [
+          "Marketing digital",
+          "Investigación de mercados",
+          "Técnicas de venta",
+          "E-commerce",
+          "Comunicación comercial",
+          "Gestión de clientes"
+        ],
+        jobs: [
+          "Asistente comercial",
+          "Ejecutivo de ventas",
+          "Soporte de marketing",
+          "Gestor de redes comerciales"
+        ],
+        actionColor: "#d97706"
+      },
+      adm: {
+        area: "adm",
+        badge: "Gestión pública",
+        badgeStyle: "background:#ede9fe;color:#5b21b6;",
+        title: "Técnico en Administración Pública y Tributaria",
+        description:
+          "Prepara para procesos administrativos, tributarios y de control en instituciones públicas y organizaciones formales.",
+        image: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=1400&q=80",
+        meta: ["2 años", "Marco legal", "Certificación técnica"],
+        subjects: [
+          "Derecho administrativo",
+          "Régimen tributario",
+          "Gestión institucional",
+          "Contabilidad gubernamental",
+          "Presupuesto público",
+          "Ética y transparencia"
+        ],
+        jobs: [
+          "Asistente administrativo",
+          "Auxiliar tributario",
+          "Soporte de gestión institucional",
+          "Apoyo en procesos fiscales"
+        ],
+        actionColor: "#7c3aed"
+      }
+    };
+
+    const filterButtons = document.querySelectorAll(".careers-toolbar button");
+    const cards = document.querySelectorAll(".career-card");
+    const backdrop = document.getElementById("career-modal-backdrop");
+    const closeButton = document.getElementById("career-modal-close");
+    const modalActionButton = document.getElementById("career-modal-action");
+
+    const modalImage = document.getElementById("career-modal-image");
+    const modalBadge = document.getElementById("career-modal-badge");
+    const modalTitle = document.getElementById("career-modal-title");
+    const modalDescription = document.getElementById("career-modal-description");
+    const modalMeta = document.getElementById("career-modal-meta");
+    const modalSubjects = document.getElementById("career-modal-subjects");
+    const modalJobs = document.getElementById("career-modal-jobs");
+
+    function setFilter(area) {
+      cards.forEach((card) => {
+        const cardArea = card.getAttribute("data-area");
+        card.style.display = area === "all" || cardArea === area ? "block" : "none";
+      });
+      filterButtons.forEach((button) => {
+        button.classList.toggle("is-active", button.getAttribute("data-filter") === area);
+      });
+    }
+
+    function openModal(key) {
+      const data = catalog[key];
+      if (!data) return;
+
+      modalImage.src = data.image;
+      modalImage.alt = data.title;
+      modalBadge.textContent = data.badge;
+      modalBadge.style.cssText = data.badgeStyle;
+      modalTitle.textContent = data.title;
+      modalDescription.textContent = data.description;
+      modalActionButton.style.background = data.actionColor;
+      modalMeta.innerHTML = data.meta.map((item) => `<span>${item}</span>`).join("");
+      modalSubjects.innerHTML = data.subjects.map((item) => `<li>${item}</li>`).join("");
+      modalJobs.innerHTML = data.jobs.map((item) => `<li>${item}</li>`).join("");
+
+      backdrop.classList.add("is-open");
+      backdrop.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal() {
+      backdrop.classList.remove("is-open");
+      backdrop.setAttribute("aria-hidden", "true");
+    }
+
+    filterButtons.forEach((button) => {
+      button.addEventListener("click", () => setFilter(button.getAttribute("data-filter") || "all"));
+    });
+
+    cards.forEach((card) => {
+      card.addEventListener("click", (event) => {
+        const key = card.getAttribute("data-key");
+        if (!key) return;
+        openModal(key);
+        event.preventDefault();
+      });
+    });
+
+    closeButton.addEventListener("click", closeModal);
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) {
+        closeModal();
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && backdrop.classList.contains("is-open")) {
+        closeModal();
+      }
+    });
+
+    modalActionButton.addEventListener("click", () => {
+      window.location.href = "{{ evaluacion_url }}";
+    });
+  })();
+</script>
+{% endblock %}

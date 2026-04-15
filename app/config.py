@@ -34,6 +34,14 @@ def _resolve_database_url() -> str:
     return "sqlite:///edtech.db"
 
 
+def _env_first(*names: str, default: str = "") -> str:
+    for name in names:
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return default
+
+
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-cambiar-en-produccion")
     SECURITY_PASSWORD_SALT = os.getenv("SECURITY_PASSWORD_SALT", "edtech-email-token-salt")
@@ -49,13 +57,17 @@ class Config:
     WTF_CSRF_ENABLED = True
 
     # Email (SMTP)
-    MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-    MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
-    MAIL_USE_TLS = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
-    MAIL_USE_SSL = os.getenv("MAIL_USE_SSL", "false").lower() == "true"
-    MAIL_USERNAME = os.getenv("MAIL_USERNAME", "")
-    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD", "")
-    MAIL_FROM = os.getenv("MAIL_FROM", MAIL_USERNAME or "noreply@edtech.local")
+    MAIL_SERVER = _env_first("MAIL_SERVER", "SMTP_HOST", default="smtp.gmail.com")
+    MAIL_PORT = int(_env_first("MAIL_PORT", "SMTP_PORT", default="587"))
+    MAIL_USE_TLS = _env_first("MAIL_USE_TLS", default="true").lower() == "true"
+    MAIL_USE_SSL = _env_first("MAIL_USE_SSL", default="false").lower() == "true"
+    MAIL_USERNAME = _env_first("MAIL_USERNAME", "SMTP_USER")
+    MAIL_PASSWORD = _env_first("MAIL_PASSWORD", "SMTP_PASS")
+    MAIL_FROM = _env_first("MAIL_FROM", "SMTP_FROM", default=MAIL_USERNAME or "noreply@edtech.local")
+    MAIL_FROM_NOREPLY = _env_first("MAIL_FROM_NOREPLY", "SMTP_FROM_NOREPLY", default=MAIL_FROM)
+    MAIL_FROM_SUPPORT = _env_first("MAIL_FROM_SUPPORT", "SMTP_FROM_SUPPORT", default=MAIL_FROM)
+    MAIL_REPLY_TO_SUPPORT = _env_first("MAIL_REPLY_TO_SUPPORT", default=MAIL_FROM_SUPPORT)
+    MAIL_BRAND_NAME = _env_first("MAIL_BRAND_NAME", default="EdTech AI")
 
     # URL base para links de verificacion y recuperacion
     APP_BASE_URL = os.getenv("APP_BASE_URL", "http://192.168.100.119:5000/")

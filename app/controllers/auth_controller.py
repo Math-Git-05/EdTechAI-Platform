@@ -31,6 +31,13 @@ from app.services.profile_service import (
     normalize_student_id,
 )
 from app.services.email_service import send_email
+from app.services.email_template_service import (
+    build_password_changed_email,
+    build_post_verification_welcome_email,
+    build_registration_welcome_email,
+    build_reset_password_email,
+    build_verification_email,
+)
 from app.services.student_data_sync_service import sync_student_data_if_exists
 from app.services.student_interest_service import sync_student_interest_from_profile
 from app.services.token_service import generate_token, verify_token
@@ -218,47 +225,64 @@ def _flash_debug_email_error() -> None:
 
 def _send_verification_email(user: User) -> bool:
     verify_url = _verification_link(user)
-
-    subject = "Verifica tu cuenta en EdTech"
-    html = f"""
-    <div style="font-family:Arial,sans-serif;line-height:1.5;">
-      <h2>Confirma tu correo</h2>
-      <p>Hola {user.nombre},</p>
-      <p>Para activar tu cuenta haz clic en el siguiente boton:</p>
-      <p><a href="{verify_url}" style="background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">Verificar cuenta</a></p>
-      <p>Si no funciona, copia este enlace en tu navegador:</p>
-      <p>{verify_url}</p>
-      <p>Este enlace expira en 24 horas.</p>
-    </div>
-    """
-    text = (
-        f"Hola {user.nombre},\n\n"
-        f"Verifica tu cuenta en EdTech con este enlace:\n{verify_url}\n\n"
-        "Este enlace expira en 24 horas."
+    payload = build_verification_email(user_name=user.nombre, verify_url=verify_url)
+    return send_email(
+        user.email,
+        payload.subject,
+        payload.html,
+        payload.text,
+        sender=payload.sender,
+        reply_to=payload.reply_to,
     )
-    return send_email(user.email, subject, html, text)
+
+
+def _send_registration_welcome_email(user: User) -> bool:
+    payload = build_registration_welcome_email(user_name=user.nombre)
+    return send_email(
+        user.email,
+        payload.subject,
+        payload.html,
+        payload.text,
+        sender=payload.sender,
+        reply_to=payload.reply_to,
+    )
+
+
+def _send_post_verification_welcome_email(user: User) -> bool:
+    payload = build_post_verification_welcome_email(user_name=user.nombre, is_active=bool(user.activo))
+    return send_email(
+        user.email,
+        payload.subject,
+        payload.html,
+        payload.text,
+        sender=payload.sender,
+        reply_to=payload.reply_to,
+    )
 
 
 def _send_reset_password_email(user: User) -> bool:
     reset_url = _reset_password_link(user)
-
-    subject = "Recuperacion de contrasena - EdTech"
-    html = f"""
-    <div style="font-family:Arial,sans-serif;line-height:1.5;">
-      <h2>Recuperar contrasena</h2>
-      <p>Hola {user.nombre},</p>
-      <p>Recibimos una solicitud para restablecer tu contrasena.</p>
-      <p><a href="{reset_url}" style="background:#2563eb;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;">Cambiar contrasena</a></p>
-      <p>Si no solicitaste este cambio, ignora este correo.</p>
-      <p>El enlace expira en 1 hora.</p>
-    </div>
-    """
-    text = (
-        f"Hola {user.nombre},\n\n"
-        f"Usa este enlace para cambiar tu contrasena:\n{reset_url}\n\n"
-        "El enlace expira en 1 hora."
+    payload = build_reset_password_email(user_name=user.nombre, reset_url=reset_url)
+    return send_email(
+        user.email,
+        payload.subject,
+        payload.html,
+        payload.text,
+        sender=payload.sender,
+        reply_to=payload.reply_to,
     )
-    return send_email(user.email, subject, html, text)
+
+
+def _send_password_changed_email(user: User) -> bool:
+    payload = build_password_changed_email(user_name=user.nombre)
+    return send_email(
+        user.email,
+        payload.subject,
+        payload.html,
+        payload.text,
+        sender=payload.sender,
+        reply_to=payload.reply_to,
+    )
 
 
 def _verification_link(user: User) -> str:
@@ -417,12 +441,15 @@ def register():
 
         db.session.commit()
 
-        sent = _send_verification_email(user)
-        if sent:
+        welcome_sent = _send_registration_welcome_email(user)
+        verification_sent = _send_verification_email(user)
+        if verification_sent:
             flash(
                 "Cuenta creada. Verifica tu correo y espera aprobacion del administrador para iniciar sesion.",
                 "success",
             )
+            if not welcome_sent:
+                flash("No se pudo enviar el correo de bienvenida inicial.", "info")
         else:
             flash(
                 "Cuenta creada y pendiente de aprobacion, pero no se pudo enviar el correo de verificacion.",
@@ -457,6 +484,9 @@ def verify_email(token):
     user.email_verificado_at = datetime.utcnow()
     db.session.add(user)
     db.session.commit()
+    welcome_sent = _send_post_verification_welcome_email(user)
+    if not welcome_sent and current_app.debug:
+        _flash_debug_email_error()
 
     if user.activo:
         flash("Correo verificado correctamente. Ahora puedes iniciar sesion.", "success")
@@ -522,6 +552,8 @@ def reset_password(token):
         user.reset_requested_at = None
         db.session.add(user)
         db.session.commit()
+        if not _send_password_changed_email(user) and current_app.debug:
+            _flash_debug_email_error()
         flash("Contrasena actualizada correctamente. Ya puedes iniciar sesion.", "success")
         return redirect(url_for("auth.login"))
 
