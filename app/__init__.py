@@ -1370,30 +1370,42 @@ def create_app(env: str = "default"):
         if db.engine.dialect.name == "mssql":
             _migrate_legacy_sqlserver_users_table()
 
-        db.create_all()
-        _ensure_user_columns()
-        _ensure_evaluacion_columns()
-        _ensure_student_profile_columns()
-        _ensure_teacher_profile_columns()
-        _ensure_calificaciones_columns()
-        _ensure_student_interests_columns()
-        _ensure_academic_scores_columns()
-        _ensure_profile_edit_request_columns()
-        _ensure_comentario_edit_request_columns()
-        _ensure_form_response_columns()
-        _ensure_ai_predictions_columns()
-        _ensure_teacher_observations_columns()
-        _drop_legacy_student_interest_fk_if_present()
-        _normalize_academic_scores_legacy_columns()
-        _drop_unused_student_data_table_if_empty()
-        _backfill_student_interests_from_profiles()
-        _backfill_academic_scores_if_empty()
-        _backfill_ai_predictions_from_evaluaciones()
-        _backfill_teacher_observations_from_evaluaciones()
-        
-        # Recreate tables that may have been dropped during migration
-        db.create_all()
-        _drop_deprecated_tables_if_requested(app)
+        startup_steps = [
+            ("create_all_initial", db.create_all),
+            ("ensure_user_columns", _ensure_user_columns),
+            ("ensure_evaluacion_columns", _ensure_evaluacion_columns),
+            ("ensure_student_profile_columns", _ensure_student_profile_columns),
+            ("ensure_teacher_profile_columns", _ensure_teacher_profile_columns),
+            ("ensure_calificaciones_columns", _ensure_calificaciones_columns),
+            ("ensure_student_interests_columns", _ensure_student_interests_columns),
+            ("ensure_academic_scores_columns", _ensure_academic_scores_columns),
+            ("ensure_profile_edit_request_columns", _ensure_profile_edit_request_columns),
+            ("ensure_comentario_edit_request_columns", _ensure_comentario_edit_request_columns),
+            ("ensure_form_response_columns", _ensure_form_response_columns),
+            ("ensure_ai_predictions_columns", _ensure_ai_predictions_columns),
+            ("ensure_teacher_observations_columns", _ensure_teacher_observations_columns),
+            ("drop_legacy_student_interest_fk_if_present", _drop_legacy_student_interest_fk_if_present),
+            ("normalize_academic_scores_legacy_columns", _normalize_academic_scores_legacy_columns),
+            ("drop_unused_student_data_table_if_empty", _drop_unused_student_data_table_if_empty),
+            ("backfill_student_interests_from_profiles", _backfill_student_interests_from_profiles),
+            ("backfill_academic_scores_if_empty", _backfill_academic_scores_if_empty),
+            ("backfill_ai_predictions_from_evaluaciones", _backfill_ai_predictions_from_evaluaciones),
+            ("backfill_teacher_observations_from_evaluaciones", _backfill_teacher_observations_from_evaluaciones),
+            ("create_all_after_migrations", db.create_all),
+        ]
+
+        for step_name, step_callable in startup_steps:
+            try:
+                step_callable()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception("Startup step failed: %s", step_name)
+
+        try:
+            _drop_deprecated_tables_if_requested(app)
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("Startup step failed: drop_deprecated_tables_if_requested")
 
         if app.config.get("SEED_TEST_USERS", False):
             from .seed import seed_test_users
