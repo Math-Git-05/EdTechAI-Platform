@@ -12,7 +12,8 @@ def _strip_html(text: str) -> str:
 
 def send_email(to_email: str, subject: str, html_body: str, text_body: str | None = None) -> bool:
     smtp_user = current_app.config.get("MAIL_USERNAME")
-    smtp_pass = (current_app.config.get("MAIL_PASSWORD") or "").strip().replace(" ", "")
+    # Solo limpiamos extremos; no alteramos espacios internos del password.
+    smtp_pass = (current_app.config.get("MAIL_PASSWORD") or "").strip()
     smtp_server = current_app.config.get("MAIL_SERVER")
     smtp_port = current_app.config.get("MAIL_PORT", 587)
     use_tls = current_app.config.get("MAIL_USE_TLS", True)
