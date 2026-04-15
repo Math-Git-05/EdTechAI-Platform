@@ -1,0 +1,128 @@
+{% extends "layout/base.html" %}
+{% block title %}Resultados de Evaluacion - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/result.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="result-page">
+  <div class="result-header">
+    <h1>Tus Resultados de Evaluacion</h1>
+    <p>Analisis personalizado de tu perfil de aptitudes</p>
+  </div>
+
+  <div class="result-container">
+    <div class="summary-card">
+      <div class="summary-header">
+        <h2>Perfil Identificado</h2>
+        <span class="completion-badge">
+          {% if evaluacion.average_score is not none %}
+            {{ '%.0f'|format(evaluacion.average_score) }}%
+          {% else %}
+            N/A
+          {% endif %}
+        </span>
+      </div>
+      {% if has_score_data %}
+        <p class="summary-text">
+          Basado en tus puntajes, intereses y calificaciones, tu orientacion principal es
+          <strong>{{ recommended_track }}</strong>.
+        </p>
+        {% if recommendation and recommendation.guidance %}
+          <p class="summary-text">{{ recommendation.guidance }}</p>
+        {% endif %}
+      {% else %}
+        <p class="summary-text">
+          Tu envio fue registrado, pero aun no se detectaron puntajes de seccion.
+          Puedes revisar de nuevo cuando los calculated fields esten disponibles.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="affinity-grid">
+      {% for card in score_cards %}
+        <div class="affinity-card {{ card.style }}">
+          <div class="affinity-header">
+            <span class="affinity-icon" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="8" r="6"></circle>
+              </svg>
+            </span>
+            <h3>{{ card.label }}</h3>
+          </div>
+          <div class="affinity-bar">
+            <div class="affinity-fill" style="width: {{ card.bar }}%"></div>
+          </div>
+          <span class="affinity-percentage">
+            {% if card.value is not none %}
+              {{ card.value_text }}
+            {% else %}
+              -
+            {% endif %}
+          </span>
+        </div>
+      {% endfor %}
+    </div>
+
+    <div class="recommendation-card">
+      <div class="recommendation-header">
+        <h3>Tecnico Recomendado</h3>
+        <span class="badge-recommended">Principal</span>
+      </div>
+      <div class="recommendation-content">
+        <div class="tech-badge {{ recommended_style }}" aria-hidden="true">
+          <svg viewBox="0 0 16 16" fill="currentColor">
+            <rect x="3" y="3" width="10" height="10" rx="2"></rect>
+          </svg>
+        </div>
+        <div class="tech-info">
+          <h4>{{ recommended_track }}</h4>
+          <p>{{ recommended_description }}</p>
+          <div class="tech-highlights">
+            {% if top_score_cards %}
+              {% for top_card in top_score_cards %}
+                <span class="highlight">{{ top_card.label }}: {{ top_card.value_text }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="highlight">En espera de puntajes calculados</span>
+            {% endif %}
+          </div>
+          {% if recommendation and recommendation.top_recommendations %}
+            <div class="tech-highlights" style="margin-top:10px;">
+              {% for rec in recommendation.top_recommendations %}
+                <span class="highlight">{{ loop.index }}. {{ rec.track_name }}: {{ '%.2f'|format(rec.score) }} ({{ rec.affinity_level }})</span>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+      <a href="{{ url_for('estudiante.index') }}" class="btn btn-primary btn-full">
+        Volver al dashboard
+      </a>
+    </div>
+
+    <div class="notes-card">
+      <h4>Por que se recomendo esta ruta?</h4>
+      {% if recommendation_reasons %}
+        <ul>
+          {% for reason in recommendation_reasons %}
+            <li>{{ reason.label }} fue considerado para definir tu orientacion recomendada.</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="text-muted text-small">No hay suficientes componentes para explicar la recomendacion todavia.</p>
+      {% endif %}
+    </div>
+
+    <div class="notes-card">
+      <h4>Notas Importantes</h4>
+      <ul>
+        <li>Estos resultados son referenciales y se basan en el analisis de tus aptitudes.</li>
+        <li>La evaluacion se completa una sola vez por estudiante para evitar duplicados.</li>
+        <li>Response ID: {{ evaluacion.referencia_externa or 'sin registro externo' }}.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

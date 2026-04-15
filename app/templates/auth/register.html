@@ -1,0 +1,743 @@
+{% extends "layout/base.html" %}
+{% block title %}Registrarse - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+<style>
+  .register-container {
+    min-height: calc(100vh - 56px);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    background: var(--bg);
+  }
+
+  .register-left {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-h) 100%);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .register-left::before {
+    content: "";
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    top: -130px;
+    left: -130px;
+    animation: orbFloatA 13s ease-in-out infinite alternate;
+  }
+
+  .register-left::after {
+    content: "";
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 50%;
+    bottom: -90px;
+    right: -90px;
+    animation: orbFloatB 16s ease-in-out infinite alternate;
+  }
+
+  @keyframes orbFloatA {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(26px, 18px) scale(1.06); }
+    100% { transform: translate(-12px, 36px) scale(0.95); }
+  }
+
+  @keyframes orbFloatB {
+    0% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-20px, -24px) scale(1.05); }
+    100% { transform: translate(14px, -12px) scale(0.96); }
+  }
+
+  .register-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    max-width: 440px;
+  }
+
+  .register-content h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+
+  .register-content p {
+    font-size: 16px;
+    opacity: 0.92;
+    line-height: 1.6;
+    margin-bottom: 28px;
+  }
+
+  .feature-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .feature-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .feature-badge svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+
+  .register-right {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  .register-card {
+    width: 100%;
+    max-width: 480px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 36px 30px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .register-card-header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .register-card-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .register-card-header p {
+    font-size: 14px;
+    color: var(--text2);
+  }
+
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .form-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .form-group input,
+  .form-group select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+  }
+
+  .form-group input::placeholder {
+    color: var(--text3);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-h));
+    color: #fff;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit;
+    margin-top: 4px;
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 16px rgba(37, 99, 235, 0.3);
+  }
+
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+
+  .btn-full {
+    width: 100%;
+  }
+
+  .auth-switch {
+    text-align: center;
+    font-size: 13px;
+    color: var(--text2);
+    margin-top: 22px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border);
+  }
+
+  .auth-switch a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .auth-switch a:hover {
+    text-decoration: underline;
+  }
+
+  .password-strength {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .password-meter {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .password-meter-fill {
+    height: 100%;
+    width: 0;
+    transition: width 0.2s ease, background-color 0.2s ease;
+    background: #dc2626;
+  }
+
+  .password-meter-fill.is-medium {
+    background: #d97706;
+  }
+
+  .password-meter-fill.is-strong {
+    background: #059669;
+  }
+
+  .password-status {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+  }
+
+  .password-helper {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .password-rules {
+    margin: 0;
+    padding-left: 18px;
+    display: grid;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .password-rules li.rule-ok {
+    color: #059669;
+  }
+
+  .profile-section {
+    display: none;
+    padding: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+  }
+
+  .profile-section.active {
+    display: block;
+  }
+
+  .profile-title {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+
+  .profile-hint {
+    margin: 4px 0 0 0;
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .interest-grid {
+    margin-top: 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .interest-row {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    padding: 10px;
+    display: grid;
+    gap: 6px;
+  }
+
+  .interest-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text2);
+    font-weight: 600;
+  }
+
+  .interest-row input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  @media (max-width: 860px) {
+    .register-container {
+      grid-template-columns: 1fr;
+    }
+
+    .register-left {
+      display: none;
+    }
+
+    .register-right {
+      padding: 24px;
+    }
+
+    .register-card {
+      max-width: 560px;
+      padding: 30px 22px;
+    }
+
+    .register-card-header h1 {
+      font-size: 24px;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="register-container">
+  <div class="register-left">
+    <div class="register-content">
+      <h2>Crea tu Cuenta</h2>
+      <p>Registra tus datos para iniciar tu orientacion tecnica y acceder a tus evaluaciones.</p>
+      <div class="feature-badges">
+        <span class="feature-badge">
+          <svg viewBox="0 0 16 16" fill="#bfdbfe">
+            <rect x="2" y="2" width="5" height="5" rx="1"></rect>
+            <rect x="9" y="2" width="5" height="5" rx="1"></rect>
+            <rect x="2" y="9" width="5" height="5" rx="1"></rect>
+            <rect x="9" y="9" width="5" height="5" rx="1"></rect>
+          </svg>
+          Perfil academico
+        </span>
+        <span class="feature-badge">
+          <svg viewBox="0 0 16 16" fill="#a7f3d0">
+            <path d="M8 1L10 6H15L11 9.5L12.5 14.5L8 11.5L3.5 14.5L5 9.5L1 6H6Z"></path>
+          </svg>
+          Evaluacion IA
+        </span>
+        <span class="feature-badge">
+          <svg viewBox="0 0 16 16" fill="#ddd6fe">
+            <circle cx="8" cy="6" r="3"></circle>
+            <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" fill="none" stroke="#ddd6fe" stroke-width="1.5"></path>
+          </svg>
+          Acceso seguro
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="register-right">
+    <div class="register-card">
+      <div class="register-card-header">
+        <h1>Crear Cuenta</h1>
+        <p>Completa tus datos para registrarte</p>
+      </div>
+
+      <form method="POST" class="auth-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+          <label for="nombre">Nombre</label>
+          <input
+            type="text"
+            id="nombre"
+            name="nombre"
+            placeholder="Juan"
+            required
+          >
+        </div>
+        
+
+        <div class="form-group">
+          <label for="apellido">Apellido</label>
+          <input
+            type="text"
+            id="apellido"
+            name="apellido"
+            placeholder="Perez"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="email">Correo electronico</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="tu@correo.com"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="rol">Tipo de usuario</label>
+          <select id="rol" name="rol" required>
+            <option value="estudiante" selected>Estudiante</option>
+            <option value="profesor">Profesor</option>
+          </select>
+        </div>
+
+        <div id="student-profile-section" class="profile-section active">
+          <p class="profile-title">Perfil academico del estudiante</p>
+          <div class="profile-grid">
+            <div class="form-group">
+              <label for="segundo_apellido">Segundo apellido</label>
+              <input type="text" id="segundo_apellido" name="segundo_apellido" placeholder="Hernandez">
+            </div>
+            <div class="form-group">
+              <label for="gender">Genero</label>
+              <select id="gender" name="gender">
+                <option value="prefiero_no_decir" selected>Prefiero no decir</option>
+                <option value="masculino">Masculino</option>
+                <option value="femenino">Femenino</option>
+                <option value="otro">Otro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="fecha_nacimiento">Fecha de nacimiento</label>
+              <input type="date" id="fecha_nacimiento" name="fecha_nacimiento">
+            </div>
+            <div class="form-group">
+              <label for="grado_nivel">Grado / Nivel</label>
+              <input type="text" id="grado_nivel" name="grado_nivel" placeholder="6to secundaria">
+            </div>
+            <div class="form-group">
+              <label for="enrollment_year">Ano de ingreso</label>
+              <input type="number" id="enrollment_year" name="enrollment_year" min="1990" max="2100" placeholder="2025">
+            </div>
+            <div class="form-group">
+              <label for="academic_status">Estado academico</label>
+              <select id="academic_status" name="academic_status">
+                <option value="activo" selected>Activo</option>
+                <option value="no_actual">No actual</option>
+                <option value="egresado">Egresado</option>
+                <option value="tecnico">Paso a tecnico</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="school_id">School ID</label>
+              <input type="text" id="school_id" name="school_id" value="10-03-00092">
+            </div>
+            <div class="form-group">
+              <label for="student_id">RNE / Matricula</label>
+              <input type="text" id="student_id" name="student_id" placeholder="Se genera automaticamente">
+            </div>
+          </div>
+          <div class="interest-grid">
+            <div class="interest-row">
+              <div class="interest-row-header">
+                <span>Interes Technology</span>
+                <strong data-interest-output="interest_technology">50%</strong>
+              </div>
+              <input type="range" id="interest_technology" name="interest_technology" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="interest-row">
+              <div class="interest-row-header">
+                <span>Interes Design</span>
+                <strong data-interest-output="interest_design">50%</strong>
+              </div>
+              <input type="range" id="interest_design" name="interest_design" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="interest-row">
+              <div class="interest-row-header">
+                <span>Interes Business</span>
+                <strong data-interest-output="interest_business">50%</strong>
+              </div>
+              <input type="range" id="interest_business" name="interest_business" min="0" max="100" step="1" value="50">
+            </div>
+            <div class="interest-row">
+              <div class="interest-row-header">
+                <span>Interes Health</span>
+                <strong data-interest-output="interest_health">50%</strong>
+              </div>
+              <input type="range" id="interest_health" name="interest_health" min="0" max="100" step="1" value="50">
+            </div>
+          </div>
+          <p class="profile-hint">Si dejas el RNE vacio, el sistema lo genera con iniciales + fecha de nacimiento.</p>
+        </div>
+
+        <div id="teacher-profile-section" class="profile-section">
+          <p class="profile-title">Perfil basico del profesor</p>
+          <div class="profile-grid">
+            <div class="form-group">
+              <label for="employee_id">Codigo de empleado</label>
+              <input type="text" id="employee_id" name="employee_id" placeholder="PROF-0012">
+            </div>
+            <div class="form-group">
+              <label for="especialidad">Especialidad</label>
+              <input type="text" id="especialidad" name="especialidad" placeholder="Orientacion tecnica">
+            </div>
+            <div class="form-group">
+              <label for="departamento">Departamento</label>
+              <input type="text" id="departamento" name="departamento" placeholder="Docencia">
+            </div>
+            <div class="form-group">
+              <label for="telefono">Telefono</label>
+              <input type="text" id="telefono" name="telefono" placeholder="809-555-1234">
+            </div>
+            <div class="form-group">
+              <label for="teacher_school_id">School ID</label>
+              <input type="text" id="teacher_school_id" name="teacher_school_id" value="10-03-00092">
+            </div>
+            <div class="form-group">
+              <label for="labor_status">Estado laboral</label>
+              <select id="labor_status" name="labor_status">
+                <option value="activo" selected>Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Contrasena</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            placeholder="********"
+            minlength="8"
+            required
+          >
+          <div class="password-strength" aria-live="polite">
+            <div class="password-meter">
+              <div id="password-meter-fill" class="password-meter-fill"></div>
+            </div>
+            <p id="password-status" class="password-status">Insegura</p>
+            <p class="password-helper">Usa mayuscula, minuscula, numero y caracter especial.</p>
+            <ul id="password-rules" class="password-rules">
+              <li data-rule="length">Minimo 8 caracteres</li>
+              <li data-rule="upper">Al menos una mayuscula</li>
+              <li data-rule="lower">Al menos una minuscula</li>
+              <li data-rule="digit">Al menos un numero</li>
+              <li data-rule="special">Al menos un caracter especial</li>
+            </ul>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary btn-full">Registrarme y comenzar</button>
+      </form>
+
+      <div class="auth-switch">
+        Ya tienes cuenta?
+        <a href="{{ url_for('auth.login') }}">Inicia sesion</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  const passwordInput = document.getElementById('password');
+  const meterFill = document.getElementById('password-meter-fill');
+  const statusLabel = document.getElementById('password-status');
+  const rulesWrap = document.getElementById('password-rules');
+  const roleSelect = document.getElementById('rol');
+  const studentSection = document.getElementById('student-profile-section');
+  const teacherSection = document.getElementById('teacher-profile-section');
+  const nombreInput = document.getElementById('nombre');
+  const apellidoInput = document.getElementById('apellido');
+  const segundoApellidoInput = document.getElementById('segundo_apellido');
+  const fechaNacimientoInput = document.getElementById('fecha_nacimiento');
+  const studentIdInput = document.getElementById('student_id');
+  const interestInputs = Array.from(document.querySelectorAll('input[type="range"][name^="interest_"]'));
+
+  const evaluatePassword = (value) => {
+    const checks = {
+      length: value.length >= 8,
+      upper: /[A-Z]/.test(value),
+      lower: /[a-z]/.test(value),
+      digit: /\d/.test(value),
+      special: /[^A-Za-z0-9]/.test(value),
+    };
+
+    const passed = Object.values(checks).filter(Boolean).length;
+    if (meterFill) {
+      meterFill.style.width = `${(passed / 5) * 100}%`;
+      meterFill.classList.remove('is-medium', 'is-strong');
+      if (passed >= 3 && passed < 5) {
+        meterFill.classList.add('is-medium');
+      } else if (passed === 5) {
+        meterFill.classList.add('is-strong');
+      }
+    }
+
+    if (statusLabel) {
+      if (passed === 5) {
+        statusLabel.textContent = 'Segura';
+      } else if (passed >= 3) {
+        statusLabel.textContent = 'Media';
+      } else {
+        statusLabel.textContent = 'Insegura';
+      }
+    }
+
+    if (rulesWrap) {
+      rulesWrap.querySelectorAll('li').forEach((ruleItem) => {
+        const ruleKey = ruleItem.dataset.rule;
+        if (!ruleKey) return;
+        ruleItem.classList.toggle('rule-ok', Boolean(checks[ruleKey]));
+      });
+    }
+  };
+
+  if (passwordInput) {
+    evaluatePassword(passwordInput.value || '');
+    passwordInput.addEventListener('input', () => evaluatePassword(passwordInput.value || ''));
+  }
+
+  const toAscii = (value) => (value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z]/g, '');
+
+  const firstLetter = (value) => {
+    const ascii = toAscii(value);
+    return ascii ? ascii.charAt(0).toUpperCase() : 'X';
+  };
+
+  const buildStudentId = () => {
+    const nombre = firstLetter(nombreInput ? nombreInput.value : '');
+    const apellido = firstLetter(apellidoInput ? apellidoInput.value : '');
+    const segundo = firstLetter(segundoApellidoInput ? segundoApellidoInput.value : '');
+    const birthRaw = fechaNacimientoInput ? (fechaNacimientoInput.value || '') : '';
+    if (!birthRaw || birthRaw.length !== 10) return '';
+
+    const parts = birthRaw.split('-');
+    if (parts.length !== 3) return '';
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2];
+    return `${nombre}${apellido}${segundo}${day}${month}${year}0001`;
+  };
+
+  const syncRoleSections = () => {
+    if (!roleSelect) return;
+    const role = roleSelect.value || 'estudiante';
+    if (studentSection) studentSection.classList.toggle('active', role === 'estudiante');
+    if (teacherSection) teacherSection.classList.toggle('active', role === 'profesor');
+
+    const studentRequiredIds = ['segundo_apellido', 'fecha_nacimiento', 'grado_nivel'];
+    studentRequiredIds.forEach((fieldId) => {
+      const field = document.getElementById(fieldId);
+      if (!field) return;
+      field.required = role === 'estudiante';
+    });
+  };
+
+  const maybeAutoFillStudentId = () => {
+    if (!studentIdInput) return;
+    if (studentIdInput.dataset.manual === '1' && studentIdInput.value.trim() !== '') return;
+    const generated = buildStudentId();
+    studentIdInput.value = generated;
+  };
+
+  if (roleSelect) {
+    syncRoleSections();
+    roleSelect.addEventListener('change', syncRoleSections);
+  }
+
+  if (studentIdInput) {
+    studentIdInput.addEventListener('input', () => {
+      studentIdInput.dataset.manual = studentIdInput.value.trim() ? '1' : '0';
+    });
+  }
+
+  [nombreInput, apellidoInput, segundoApellidoInput, fechaNacimientoInput].forEach((input) => {
+    if (!input) return;
+    input.addEventListener('input', maybeAutoFillStudentId);
+    input.addEventListener('change', maybeAutoFillStudentId);
+  });
+  maybeAutoFillStudentId();
+
+  const syncInterestOutput = (input) => {
+    if (!input) return;
+    const out = document.querySelector(`[data-interest-output="${input.name}"]`);
+    if (!out) return;
+    out.textContent = `${input.value || 0}%`;
+  };
+
+  interestInputs.forEach((input) => {
+    syncInterestOutput(input);
+    input.addEventListener('input', () => syncInterestOutput(input));
+    input.addEventListener('change', () => syncInterestOutput(input));
+  });
+</script>
+{% endblock %}

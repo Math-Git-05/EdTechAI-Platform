@@ -1,0 +1,354 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Resultados de Estudiantes - Admin EdTech{% endblock %}
+
+{% block admin_extra_head %}
+<style>
+  .result-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+    padding: 18px;
+  }
+
+  .result-modal-backdrop.open {
+    display: flex;
+  }
+
+  .result-modal {
+    width: min(760px, 96vw);
+    max-height: 88vh;
+    overflow: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    padding: 18px;
+  }
+
+  .result-modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .result-modal-close {
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+
+  .result-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .result-modal-card {
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .result-modal-list {
+    margin: 0;
+    padding-left: 18px;
+  }
+
+  .result-modal-list li {
+    margin-bottom: 6px;
+  }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page wide">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Resultados de Estudiantes</h1>
+      <p>Vista global de resultados, tecnico recomendado y estado de evaluaciones por estudiante.</p>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_total }}</div>
+      <div class="stat-label">Estudiantes totales</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_con_resultado }}</div>
+      <div class="stat-label">Con resultado</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_sin_resultado }}</div>
+      <div class="stat-label">Sin resultado</div>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Listado de Resultados</h2>
+    <div class="bulk-controls" style="margin-bottom:14px;">
+      <div class="table-search" style="max-width:none; margin-bottom:0;">
+        <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+        <input
+          type="search"
+          id="search-resultados-admin"
+          class="table-search-input"
+          placeholder="Buscar por estudiante, RNE, correo, seccion o tecnico..."
+        >
+      </div>
+      <div>
+        <label for="filter-seccion-resultados">Seccion</label>
+        <select id="filter-seccion-resultados" class="table-select">
+          <option value="">Todas</option>
+          <option value="sin-seccion">Sin seccion</option>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+          <option value="d">D</option>
+          <option value="e">E</option>
+        </select>
+      </div>
+      <div>
+        <label for="filter-estado-resultados">Estado</label>
+        <select id="filter-estado-resultados" class="table-select">
+          <option value="">Todos</option>
+          <option value="con-resultado">Con resultado</option>
+          <option value="sin-resultado">Sin resultado</option>
+        </select>
+      </div>
+    </div>
+    <p id="search-resultados-admin-result" class="table-search-result"></p>
+
+    {% if resultado_rows %}
+      <div class="users-table">
+        <table id="tabla-resultados-admin">
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>RNE</th>
+              <th>Correo</th>
+              <th>Seccion</th>
+              <th>Promedio</th>
+              <th>Tecnico sugerido</th>
+              <th>Fecha resultado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in resultado_rows %}
+              {% set est = row.estudiante %}
+              {% set eval = row.evaluacion %}
+              {% set profile = est.student_profile %}
+              {% set seccion_tag = (est.seccion or 'sin-seccion') | lower %}
+              {% set estado_tag = 'con-resultado' if eval else 'sin-resultado' %}
+              <tr
+                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ est.email ~ ' ' ~ (profile.student_id if profile else '') ~ ' ' ~ (est.seccion or '') ~ ' ' ~ row.tecnico) | lower }}"
+                data-seccion="{{ seccion_tag }}"
+                data-estado="{{ estado_tag }}"
+              >
+                <td>{{ est.nombre }} {{ est.apellido }}</td>
+                <td>{{ profile.student_id if profile else '-' }}</td>
+                <td>{{ est.email }}</td>
+                <td>{{ est.seccion or '-' }}</td>
+                <td>
+                  {% if row.promedio is not none %}
+                    {{ '%.2f'|format(row.promedio) }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                <td>
+                  {% if eval %}
+                    <span class="badge-primary">{{ row.tecnico }}</span>
+                  {% else %}
+                    <span class="badge-secondary">Sin evaluacion</span>
+                  {% endif %}
+                </td>
+                <td>{{ row.fecha_resultado.strftime('%Y-%m-%d %H:%M') if row.fecha_resultado else '-' }}</td>
+                <td>
+                  {% if eval %}
+                    <button
+                      type="button"
+                      class="btn-small js-open-result-modal"
+                      data-student="{{ (est.nombre ~ ' ' ~ est.apellido) | e }}"
+                      data-rne="{{ (profile.student_id if profile else '-') | e }}"
+                      data-email="{{ est.email | e }}"
+                      data-section="{{ (est.seccion or '-') | e }}"
+                      data-track="{{ row.tecnico | e }}"
+                      data-average="{{ ('%.2f'|format(row.promedio)) if row.promedio is not none else '-' }}"
+                      data-date="{{ row.fecha_resultado.strftime('%Y-%m-%d %H:%M') if row.fecha_resultado else '-' }}"
+                      data-guidance="{{ (row.guidance or '') | e }}"
+                      data-scores='{{ row.score_cards | tojson }}'
+                    >
+                      Ver resultado
+                    </button>
+                  {% else %}
+                    <span class="badge-secondary">Sin detalle</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay estudiantes para mostrar.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div id="result-modal-backdrop" class="result-modal-backdrop" aria-hidden="true">
+  <div class="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-modal-title">
+    <div class="result-modal-head">
+      <h3 id="result-modal-title" style="margin:0;">Detalle de resultado</h3>
+      <button type="button" class="result-modal-close" id="result-modal-close">X</button>
+    </div>
+
+    <div class="result-modal-grid">
+      <div class="result-modal-card"><strong>Estudiante:</strong><br><span id="modal-student">-</span></div>
+      <div class="result-modal-card"><strong>RNE:</strong><br><span id="modal-rne">-</span></div>
+      <div class="result-modal-card"><strong>Correo:</strong><br><span id="modal-email">-</span></div>
+      <div class="result-modal-card"><strong>Seccion:</strong><br><span id="modal-section">-</span></div>
+      <div class="result-modal-card"><strong>Tecnico:</strong><br><span id="modal-track">-</span></div>
+      <div class="result-modal-card"><strong>Promedio:</strong><br><span id="modal-average">-</span></div>
+    </div>
+
+    <div class="result-modal-card" style="margin-bottom:10px;">
+      <strong>Fecha de resultado:</strong> <span id="modal-date">-</span>
+    </div>
+
+    <div class="result-modal-card" style="margin-bottom:10px;">
+      <strong>Resumen del modelo</strong>
+      <p id="modal-guidance" class="text-small" style="margin:8px 0 0 0;">-</p>
+    </div>
+
+    <div class="result-modal-card">
+      <strong>Puntajes por seccion</strong>
+      <ul id="modal-scores" class="result-modal-list"></ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  (function () {
+    const input = document.getElementById('search-resultados-admin');
+    const seccion = document.getElementById('filter-seccion-resultados');
+    const estado = document.getElementById('filter-estado-resultados');
+    const table = document.getElementById('tabla-resultados-admin');
+    const result = document.getElementById('search-resultados-admin-result');
+    if (!input || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (input.value || '').trim().toLowerCase();
+      const seccionValue = ((seccion && seccion.value) || '').trim().toLowerCase();
+      const estadoValue = ((estado && estado.value) || '').trim().toLowerCase();
+      let visible = 0;
+
+      rows.forEach((row) => {
+        const text = (row.dataset.search || '').toLowerCase();
+        const rowSeccion = (row.dataset.seccion || '').toLowerCase();
+        const rowEstado = (row.dataset.estado || '').toLowerCase();
+        const matchQuery = !query || text.includes(query);
+        const matchSeccion = !seccionValue || rowSeccion === seccionValue;
+        const matchEstado = !estadoValue || rowEstado === estadoValue;
+        const match = matchQuery && matchSeccion && matchEstado;
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+
+      if (result) {
+        result.textContent = `${visible} de ${rows.length} estudiante(s)`;
+      }
+    };
+
+    input.addEventListener('input', runFilter);
+    if (seccion) seccion.addEventListener('change', runFilter);
+    if (estado) estado.addEventListener('change', runFilter);
+    runFilter();
+  })();
+
+  (function () {
+    const backdrop = document.getElementById('result-modal-backdrop');
+    const closeBtn = document.getElementById('result-modal-close');
+    if (!backdrop || !closeBtn) return;
+
+    const elStudent = document.getElementById('modal-student');
+    const elRne = document.getElementById('modal-rne');
+    const elEmail = document.getElementById('modal-email');
+    const elSection = document.getElementById('modal-section');
+    const elTrack = document.getElementById('modal-track');
+    const elAverage = document.getElementById('modal-average');
+    const elDate = document.getElementById('modal-date');
+    const elGuidance = document.getElementById('modal-guidance');
+    const elScores = document.getElementById('modal-scores');
+
+    const openModal = (button) => {
+      if (!button) return;
+      if (elStudent) elStudent.textContent = button.dataset.student || '-';
+      if (elRne) elRne.textContent = button.dataset.rne || '-';
+      if (elEmail) elEmail.textContent = button.dataset.email || '-';
+      if (elSection) elSection.textContent = button.dataset.section || '-';
+      if (elTrack) elTrack.textContent = button.dataset.track || '-';
+      if (elAverage) elAverage.textContent = button.dataset.average || '-';
+      if (elDate) elDate.textContent = button.dataset.date || '-';
+      if (elGuidance) elGuidance.textContent = button.dataset.guidance || 'Sin resumen disponible.';
+
+      if (elScores) {
+        elScores.innerHTML = '';
+        let scores = [];
+        try {
+          scores = JSON.parse(button.dataset.scores || '[]');
+        } catch (error) {
+          scores = [];
+        }
+        if (!scores.length) {
+          const li = document.createElement('li');
+          li.textContent = 'No hay puntajes detallados.';
+          elScores.appendChild(li);
+        } else {
+          scores.forEach((item) => {
+            const li = document.createElement('li');
+            li.textContent = `${item.label || 'Seccion'}: ${item.value_text || '-'}`;
+            elScores.appendChild(li);
+          });
+        }
+      }
+
+      backdrop.classList.add('open');
+      backdrop.setAttribute('aria-hidden', 'false');
+    };
+
+    const closeModal = () => {
+      backdrop.classList.remove('open');
+      backdrop.setAttribute('aria-hidden', 'true');
+    };
+
+    document.querySelectorAll('.js-open-result-modal').forEach((button) => {
+      button.addEventListener('click', () => openModal(button));
+    });
+
+    closeBtn.addEventListener('click', closeModal);
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) closeModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeModal();
+    });
+  })();
+</script>
+{% endblock %}

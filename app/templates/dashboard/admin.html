@@ -1,0 +1,521 @@
+{% extends "layout/base.html" %}
+{% block title %}Dashboard Admin - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Panel Administrativo</h1>
+      <p>Gestiona usuarios, roles y asignaciones estudiante-profesor en tiempo real.</p>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">{{ total_users }}</div>
+      <div class="stat-label">Usuarios totales</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_count }}</div>
+      <div class="stat-label">Estudiantes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ profesores_count }}</div>
+      <div class="stat-label">Profesores</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ admins_count }}</div>
+      <div class="stat-label">Administradores</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_asignados_count }}</div>
+      <div class="stat-label">Estudiantes asignados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ evaluaciones_count }}</div>
+      <div class="stat-label">Evaluaciones registradas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ evaluaciones_tally_count }}</div>
+      <div class="stat-label">Submissions Tally</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">
+        {% if score_averages.average_score is not none %}
+          {{ '%.1f'|format(score_averages.average_score) }}
+        {% else %}
+          -
+        {% endif %}
+      </div>
+      <div class="stat-label">Promedio general</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes_sin_asignar_count }}</div>
+      <div class="stat-label">Sin profesor asignado</div>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Average por Seccion de Aptitud</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</div>
+        <div class="stat-label">Razonamiento logico</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</div>
+        <div class="stat-label">Resolucion problemas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</div>
+        <div class="stat-label">Atencion al detalle</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.creativity_score) if score_averages.creativity_score is not none else '-' }}</div>
+        <div class="stat-label">Creatividad</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</div>
+        <div class="stat-label">Habilidad tecnica</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Solicitudes de Edicion de Perfil</h2>
+    {% if solicitudes_perfil %}
+      <form method="POST" action="{{ url_for('admin.revisar_solicitudes_masiva') }}" class="bulk-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="bulk-controls">
+          <div>
+            <label for="accion_solicitudes">Accion masiva</label>
+            <select id="accion_solicitudes" name="accion_solicitudes" class="table-select">
+              <option value="aprobar">Aprobar seleccionadas</option>
+              <option value="rechazar">Rechazar seleccionadas</option>
+            </select>
+          </div>
+          <div>
+            <label for="admin_note_masivo">Nota (opcional)</label>
+            <input id="admin_note_masivo" name="admin_note_masivo" class="table-select" placeholder="Motivo o comentario para las solicitudes">
+          </div>
+          <div class="bulk-submit-wrap">
+            <button type="submit" class="btn btn-primary btn-sm">Aplicar en lote</button>
+          </div>
+        </div>
+
+        <div class="users-table">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="solicitudes-select-all"></th>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>RNE actual</th>
+                <th>RNE solicitado</th>
+                <th>Solicitada</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for solicitud in solicitudes_perfil %}
+                {% set payload = solicitud.parsed_payload if solicitud.parsed_payload is defined else {} %}
+                {% set student_payload = payload.get('student_profile', {}) if payload else {} %}
+                <tr>
+                  <td>
+                    <input type="checkbox" name="solicitud_ids" value="{{ solicitud.id }}" class="solicitud-check">
+                  </td>
+                  <td>#{{ solicitud.id }}</td>
+                  <td>
+                    {% if solicitud.requester %}
+                      {{ solicitud.requester.nombre }} {{ solicitud.requester.apellido }}<br>
+                      <span class="text-muted text-small">{{ solicitud.requester.email }}</span>
+                    {% else %}
+                      Usuario eliminado
+                    {% endif %}
+                  </td>
+                  <td>{{ solicitud.requester.student_profile.student_id if solicitud.requester and solicitud.requester.student_profile else '-' }}</td>
+                  <td>{{ student_payload.get('student_id', '-') if student_payload else '-' }}</td>
+                  <td>{{ solicitud.requested_at.strftime('%Y-%m-%d %H:%M') if solicitud.requested_at else '-' }}</td>
+                  <td>
+                    <div class="table-form compact" style="display:flex; gap:8px;">
+                      <button
+                        type="submit"
+                        class="btn-small"
+                        formaction="{{ url_for('admin.aprobar_solicitud_perfil', solicitud_id=solicitud.id) }}"
+                        formmethod="post"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        type="submit"
+                        class="btn-small"
+                        formaction="{{ url_for('admin.rechazar_solicitud_perfil', solicitud_id=solicitud.id) }}"
+                        formmethod="post"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+    {% else %}
+      <p class="empty-state">No hay solicitudes pendientes de edicion de perfil.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Asignar Estudiantes a Profesores</h2>
+    <div class="section-actions">
+      <a href="{{ url_for('admin.asignaciones') }}" class="btn btn-primary btn-sm">Asignacion masiva</a>
+    </div>
+    <div class="table-search">
+      <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+      <input
+        type="search"
+        id="search-asignaciones-admin"
+        class="table-search-input"
+        placeholder="Buscar estudiante, RNE, correo, seccion o profesor..."
+      >
+    </div>
+    <p id="search-asignaciones-admin-result" class="table-search-result"></p>
+    {% if estudiantes %}
+      <div class="users-table">
+        <table id="tabla-asignaciones-admin">
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>RNE</th>
+              <th>Correo</th>
+              <th>Profesor asignado</th>
+              <th>Seccion</th>
+              <th>Perfil</th>
+              <th>Guardar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for estudiante in estudiantes %}
+              <tr data-search="{{ (estudiante.nombre ~ ' ' ~ estudiante.apellido ~ ' ' ~ estudiante.email ~ ' ' ~ (estudiante.student_profile.student_id if estudiante.student_profile else '') ~ ' ' ~ (estudiante.seccion or '') ~ ' ' ~ ((estudiante.profesor.nombre ~ ' ' ~ estudiante.profesor.apellido) if estudiante.profesor else 'sin asignar')) | lower }}">
+                <td>{{ estudiante.nombre }} {{ estudiante.apellido }}</td>
+                <td>{{ estudiante.student_profile.student_id if estudiante.student_profile else '-' }}</td>
+                <td>{{ estudiante.email }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.asignar_profesor', estudiante_id=estudiante.id) }}" class="table-form" id="assign-form-{{ estudiante.id }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="profesor_id" class="table-select">
+                      <option value="">Sin asignar</option>
+                      {% for profesor in profesores %}
+                        <option value="{{ profesor.id }}" {% if estudiante.profesor_id == profesor.id %}selected{% endif %}>
+                          {{ profesor.nombre }} {{ profesor.apellido }}
+                        </option>
+                      {% endfor %}
+                    </select>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_seccion', user_id=estudiante.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="seccion" class="table-select" value="{{ estudiante.seccion or '' }}" placeholder="A-1">
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  <a href="{{ url_for('admin.editar_perfil_usuario', user_id=estudiante.id) }}" class="btn-small">Editar</a>
+                </td>
+                <td>
+                    <button type="submit" form="assign-form-{{ estudiante.id }}" class="btn-small">Guardar</button>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if not profesores %}
+        <p class="empty-state">No hay profesores creados. Registra o cambia el rol de un usuario a profesor para habilitar asignaciones.</p>
+      {% endif %}
+    {% else %}
+      <p class="empty-state">No hay estudiantes registrados.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Calificaciones Academicas</h2>
+    {% if submissions_sheet_url %}
+      <div class="section-actions">
+        <a href="{{ submissions_sheet_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
+          Abrir hoja de submissions
+        </a>
+      </div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('admin.sincronizar_submission_tally') }}" class="bulk-form" style="margin-bottom:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="submission_id_sync">Submission ID (Tally)</label>
+          <input id="submission_id_sync" name="submission_id" class="table-select" placeholder="Ej: vJ8qA1k..." required>
+        </div>
+        <div>
+          <label for="submission_student_sync">Estudiante (si no existe evaluacion previa)</label>
+          <select id="submission_student_sync" name="estudiante_id" class="table-select">
+            <option value="">Auto detectar por submission</option>
+            {% for est in estudiantes %}
+              <option value="{{ est.id }}">
+                {{ est.nombre }} {{ est.apellido }} {% if est.student_profile %}- {{ est.student_profile.student_id }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-secondary btn-sm">Sincronizar desde Tally</button>
+        </div>
+      </div>
+    </form>
+    <form method="POST" action="{{ url_for('admin.crear_calificacion') }}" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="estudiante_id_grade">Estudiante</label>
+          <select id="estudiante_id_grade" name="estudiante_id" class="table-select" required>
+            <option value="">Seleccionar estudiante</option>
+            {% for est in estudiantes %}
+              <option value="{{ est.id }}">
+                {{ est.nombre }} {{ est.apellido }} {% if est.student_profile %}- {{ est.student_profile.student_id }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="asignatura_grade">Asignatura</label>
+          <input id="asignatura_grade" name="asignatura" class="table-select" placeholder="Matematicas" required>
+        </div>
+        <div>
+          <label for="valor_grade">Calificacion</label>
+          <input id="valor_grade" name="valor" type="number" min="0" max="100" step="0.01" class="table-select" placeholder="89.5" required>
+        </div>
+        <div>
+          <label for="periodo_grade">Periodo</label>
+          <input id="periodo_grade" name="periodo" class="table-select" placeholder="Q1 / Semestre 1">
+        </div>
+        <div>
+          <label for="anio_grade">Ano</label>
+          <input id="anio_grade" name="anio" type="number" min="1990" max="2100" class="table-select" placeholder="2026">
+        </div>
+        <div>
+          <label for="observaciones_grade">Observaciones</label>
+          <input id="observaciones_grade" name="observaciones" class="table-select" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="section-actions">
+        <button type="submit" class="btn btn-primary btn-sm">Guardar calificacion</button>
+      </div>
+    </form>
+
+    {% if calificaciones_recientes %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>Asignatura</th>
+              <th>Valor</th>
+              <th>Periodo</th>
+              <th>Ano</th>
+              <th>Fecha</th>
+              <th>Accion</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cal in calificaciones_recientes %}
+              <tr>
+                <td>{{ cal.estudiante_calificado.nombre }} {{ cal.estudiante_calificado.apellido }}</td>
+                <td>{{ cal.asignatura }}</td>
+                <td>{{ '%.2f'|format(cal.valor) }}</td>
+                <td>{{ cal.periodo or '-' }}</td>
+                <td>{{ cal.anio or '-' }}</td>
+                <td>{{ cal.fecha_creacion.strftime('%Y-%m-%d') if cal.fecha_creacion else '-' }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.eliminar_calificacion', calificacion_id=cal.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn-small">Eliminar</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">Aun no hay calificaciones registradas.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Control de Usuarios</h2>
+    <div class="table-search">
+      <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+      <input
+        type="search"
+        id="search-usuarios-admin"
+        class="table-search-input"
+        placeholder="Buscar usuario por nombre, RNE, correo o rol..."
+      >
+    </div>
+    <p id="search-usuarios-admin-result" class="table-search-result"></p>
+    {% if usuarios %}
+      <div class="users-table">
+        <table id="tabla-usuarios-admin">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Verificacion</th>
+              <th>Perfil</th>
+              <th>Acceso</th>
+              <th>Registro</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in usuarios %}
+              <tr data-search="{{ (user.nombre ~ ' ' ~ user.apellido ~ ' ' ~ user.email ~ ' ' ~ user.role ~ ' ' ~ (user.student_profile.student_id if user.student_profile else '') ~ ' ' ~ ('activo' if user.activo else 'inactivo')) | lower }}">
+                <td>{{ user.nombre }} {{ user.apellido }}</td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_rol', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="role" class="table-select">
+                      <option value="estudiante" {% if user.role == 'estudiante' %}selected{% endif %}>estudiante</option>
+                      <option value="profesor" {% if user.role == 'profesor' %}selected{% endif %}>profesor</option>
+                      <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>admin</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_estado', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="activo" class="table-select">
+                      <option value="1" {% if user.activo %}selected{% endif %}>Activo</option>
+                      <option value="0" {% if not user.activo %}selected{% endif %}>Inactivo</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_verificacion', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="email_verificado" class="table-select">
+                      <option value="1" {% if user.email_verificado %}selected{% endif %}>Verificado</option>
+                      <option value="0" {% if not user.email_verificado %}selected{% endif %}>No verificado</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  {% if user.role in ['estudiante', 'profesor'] %}
+                    <a href="{{ url_for('admin.editar_perfil_usuario', user_id=user.id) }}" class="btn-small">Editar perfil</a>
+                  {% else %}
+                    <span class="badge-secondary">N/A</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if user.id != current_user.id %}
+                    <form method="POST" action="{{ url_for('admin.eliminar_usuario_login', user_id=user.id) }}" class="table-form compact js-delete-user">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="confirm_token" value="">
+                      <button type="submit" class="btn-small btn-danger">Eliminar acceso</button>
+                    </form>
+                  {% else %}
+                    <span class="badge-secondary">Tu cuenta</span>
+                  {% endif %}
+                </td>
+                <td>{{ user.fecha_creacion.strftime('%Y-%m-%d') if user.fecha_creacion else '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay usuarios para administrar.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function attachTableSearch(inputId, tableId, resultId) {
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    const result = document.getElementById(resultId);
+    if (!input || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (input.value || '').trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const text = (row.dataset.search || row.innerText || '').toLowerCase();
+        const match = !query || text.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+      if (result) {
+        result.textContent = `${visible} de ${rows.length} registro(s)`;
+      }
+    };
+
+    input.addEventListener('input', runFilter);
+    runFilter();
+  }
+
+  function attachDeleteUserConfirmation() {
+    const forms = document.querySelectorAll('.js-delete-user');
+    if (!forms.length) return;
+
+    forms.forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        const first = window.confirm(
+          'Vas a eliminar el acceso de este usuario. La informacion academica se conservara. Deseas continuar?'
+        );
+        if (!first) {
+          event.preventDefault();
+          return;
+        }
+
+        const second = window.prompt('Confirma escribiendo ELIMINAR');
+        if ((second || '').trim().toUpperCase() !== 'ELIMINAR') {
+          event.preventDefault();
+          window.alert('Confirmacion invalida. No se elimino el acceso.');
+          return;
+        }
+
+        const tokenInput = form.querySelector('input[name="confirm_token"]');
+        if (tokenInput) tokenInput.value = 'ELIMINAR';
+      });
+    });
+  }
+
+  attachTableSearch('search-asignaciones-admin', 'tabla-asignaciones-admin', 'search-asignaciones-admin-result');
+  attachTableSearch('search-usuarios-admin', 'tabla-usuarios-admin', 'search-usuarios-admin-result');
+  attachDeleteUserConfirmation();
+
+  const selectAllSolicitudes = document.getElementById('solicitudes-select-all');
+  if (selectAllSolicitudes) {
+    selectAllSolicitudes.addEventListener('change', function () {
+      const checked = !!selectAllSolicitudes.checked;
+      document.querySelectorAll('.solicitud-check').forEach(function (checkbox) {
+        checkbox.checked = checked;
+      });
+    });
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "layout/base.html" %}
+{% block title %}Comentarios de Evaluacion - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<style>
+  .comment-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+    background: var(--bg2);
+  }
+
+  .comment-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .comment-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .comment-form label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text1);
+  }
+
+  .comment-form textarea {
+    width: 100%;
+    min-height: 110px;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text1);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+
+  .comment-form textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  .comment-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .comment-updated {
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .request-box {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+    background: var(--bg2);
+  }
+
+  .request-box form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Comentarios de Evaluacion</h1>
+      <p>{{ estudiante.nombre }} {{ estudiante.apellido }} ({{ estudiante.email }})</p>
+      <p class="welcome-subtitle">Seccion: {{ estudiante.seccion or 'Sin seccion' }}</p>
+    </div>
+  </div>
+
+  <div class="section-actions">
+    <a href="{{ url_for('profesor.index') }}" class="btn-small">Volver a mis estudiantes</a>
+  </div>
+
+  <div class="request-box">
+    <h2>Permiso de Edicion</h2>
+    {% if approved_edit_request %}
+      <p class="text-small">Permiso aprobado. Ya puedes editar un comentario existente y al guardar se consumira este permiso.</p>
+      {% if approved_edit_request.admin_note %}
+        <p class="text-muted text-small">Nota admin: {{ approved_edit_request.admin_note }}</p>
+      {% endif %}
+    {% elif pending_edit_request %}
+      <p class="text-small">Tu solicitud de edicion esta pendiente desde {{ pending_edit_request.requested_at.strftime('%Y-%m-%d %H:%M') if pending_edit_request.requested_at else '-' }}.</p>
+      {% if pending_edit_request.teacher_note %}
+        <p class="text-muted text-small">Motivo enviado: {{ pending_edit_request.teacher_note }}</p>
+      {% endif %}
+    {% else %}
+      <p class="text-small">Si necesitas editar un comentario ya guardado, solicita permiso al administrador.</p>
+      <form method="POST" action="{{ url_for('profesor.solicitar_edicion_comentarios', estudiante_id=estudiante.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="teacher_note">Motivo (opcional)</label>
+        <input id="teacher_note" name="teacher_note" class="table-select" placeholder="Ejemplo: corregir observacion por error de digitacion">
+        <div class="section-actions">
+          <button type="submit" class="btn-small">Solicitar permiso de edicion</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+
+  <div class="estudiantes-section">
+    <h2>Historial y Comentarios</h2>
+    {% if evaluaciones %}
+      {% for evaluacion in evaluaciones %}
+        {% set comentario_actual = evaluacion.comentario_profesor or '' %}
+        {% set has_comment = comentario_actual %}
+        {% set can_edit_existing = approved_edit_request is not none %}
+        <div class="comment-card">
+          <div class="comment-meta">
+            <span class="badge-primary">Evaluacion #{{ evaluacion.id }}</span>
+            <span>Estado: {{ evaluacion.estado }}</span>
+            <span>Origen: {{ evaluacion.origen }}</span>
+            <span>Creada: {{ evaluacion.fecha_creacion.strftime('%Y-%m-%d %H:%M') if evaluacion.fecha_creacion else '-' }}</span>
+          </div>
+          {% if has_comment and not can_edit_existing %}
+            <p class="text-muted text-small" style="margin: 0 0 8px 0;">
+              Este comentario ya existe. Para editarlo, solicita permiso al administrador.
+            </p>
+          {% endif %}
+          <form method="POST" class="comment-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="evaluacion_id" value="{{ evaluacion.id }}">
+            <label for="comentario-{{ evaluacion.id }}">Comentario del profesor</label>
+            <textarea
+              id="comentario-{{ evaluacion.id }}"
+              name="comentario"
+              placeholder="Escribe observaciones, fortalezas y recomendaciones para este estudiante."
+              {% if has_comment and not can_edit_existing %}readonly{% endif %}
+              required
+            >{{ comentario_actual }}</textarea>
+            <div class="comment-actions">
+              <span class="comment-updated">
+                Ultima actualizacion:
+                {{ evaluacion.comentario_profesor_at.strftime('%Y-%m-%d %H:%M') if evaluacion.comentario_profesor_at else 'sin comentarios' }}
+              </span>
+              <button type="submit" class="btn-small" {% if has_comment and not can_edit_existing %}disabled{% endif %}>
+                Guardar comentario
+              </button>
+            </div>
+          </form>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="empty-state">Este estudiante aun no tiene evaluaciones. Puedes guardar una nota inicial.</p>
+      <form method="POST" class="comment-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="evaluacion_id" value="new">
+        <label for="comentario-new">Comentario inicial</label>
+        <textarea
+          id="comentario-new"
+          name="comentario"
+          placeholder="Escribe observaciones para iniciar el historial del estudiante."
+          required
+        ></textarea>
+        <div class="comment-actions">
+          <span class="comment-updated">Se creara una evaluacion de origen profesor.</span>
+          <button type="submit" class="btn-small">Crear comentario</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}EdTech - Orientacion Tecnica{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar">
+    <a href="{{ url_for('main.index') }}" class="navbar-brand" style="text-decoration:none;">
+      <span class="brand-dot"></span>
+      Ed<span class="brand-accent">Tech</span>
+    </a>
+
+    {% if current_user.is_authenticated %}
+    <div class="navbar-nav">
+      <span class="role-badge role-{{ current_user.role }}">{{ current_user.role }}</span>
+      <a href="{{ url_for('dashboard.index') }}" class="nav-link">Mi Dashboard</a>
+
+      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">
+        <span id="theme-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"></path>
+          </svg>
+        </span>
+      </button>
+
+      <div class="notif-menu">
+        <button type="button" class="notif-chip" aria-haspopup="true" aria-expanded="false" title="Notificaciones">
+          <span class="notif-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 17H5.2a1.2 1.2 0 0 1-1.1-1.6l1-2.3V9a6.9 6.9 0 0 1 13.8 0v4.1l1 2.3A1.2 1.2 0 0 1 18.8 17H17"></path>
+              <path d="M9 17a3 3 0 0 0 6 0"></path>
+            </svg>
+          </span>
+          {% if nav_notifications_count > 0 %}
+            <span class="notif-count">{{ nav_notifications_count }}</span>
+          {% endif %}
+        </button>
+        <div class="notif-dropdown">
+          <div class="notif-head">
+            <strong>Notificaciones</strong>
+            <span class="text-muted text-small">{{ nav_notifications_count }} pendiente(s)</span>
+          </div>
+          {% if nav_notifications %}
+            <div class="notif-list">
+              {% for item in nav_notifications %}
+                <a href="{{ item.url }}" class="notif-link">{{ item.label }}</a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted text-small" style="margin: 0; padding: 6px 4px;">No hay notificaciones nuevas.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="user-menu">
+        <button type="button" class="user-chip" aria-haspopup="true" aria-expanded="false">
+          <span class="user-avatar">{{ current_user.nombre[0] | upper }}{{ current_user.apellido[0] | upper }}</span>
+          <span class="user-name">{{ current_user.nombre }}</span>
+        </button>
+        <div class="user-dropdown">
+          <div class="user-dropdown-head">
+            <strong>{{ current_user.nombre }} {{ current_user.apellido }}</strong>
+            <span class="text-muted text-small">{{ current_user.email }}</span>
+          </div>
+          {% if current_user.role == 'estudiante' and current_user.student_profile %}
+            <div class="user-dropdown-meta">
+              <div><strong>RNE:</strong> {{ current_user.student_profile.student_id }}</div>
+              <div><strong>Estado:</strong> {{ current_user.student_profile.academic_status }}</div>
+            </div>
+          {% endif %}
+          <div class="user-dropdown-actions">
+            <a href="{{ url_for('dashboard.index') }}" class="nav-link">Mi dashboard</a>
+            {% if current_user.role == 'estudiante' %}
+              <a href="{{ url_for('estudiante.perfil') }}" class="nav-link">Editar perfil</a>
+            {% elif current_user.role == 'profesor' %}
+              <a href="{{ url_for('profesor.perfil') }}" class="nav-link">Editar perfil</a>
+            {% endif %}
+            <a href="{{ url_for('auth.logout') }}" class="nav-link logout-btn">Salir</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="navbar-nav">
+      <button class="theme-toggle" id="theme-btn" onclick="toggleTheme()" title="Cambiar tema">
+        <span id="theme-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"></path>
+          </svg>
+        </span>
+      </button>
+      <a href="{{ url_for('auth.login') }}" class="nav-link">Ingresar</a>
+      <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm">Registrarse</a>
+    </div>
+    {% endif %}
+  </nav>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container" id="flash-container" style="padding-top:12px;">
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} auto-dismiss">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% if current_user.is_authenticated and show_notification_toast and nav_notifications_count > 0 %}
+    {% set notif_target = nav_notifications[0].url if nav_notifications else url_for('dashboard.index') %}
+    <div id="notif-toast" class="notif-toast" data-url="{{ notif_target }}">
+      <div>
+        <strong>Notificaciones pendientes</strong>
+        <span>Tienes {{ nav_notifications_count }} pendiente(s)</span>
+      </div>
+      <a href="{{ notif_target }}">Ver</a>
+    </div>
+  {% endif %}
+
+  {% block content %}{% endblock %}
+
+  <script>
+    (function() {
+      const saved = localStorage.getItem('edtech-theme') || 'dark';
+      document.documentElement.setAttribute('data-theme', saved);
+      updateThemeIcon(saved);
+    })();
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      localStorage.setItem('edtech-theme', next);
+      updateThemeIcon(next);
+    }
+
+    function updateThemeIcon(theme) {
+      const icon = document.getElementById('theme-icon');
+      if (!icon) return;
+
+      const sunSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"></path></svg>';
+      const moonSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"></path></svg>';
+
+      icon.innerHTML = theme === 'dark' ? sunSvg : moonSvg;
+    }
+
+    // Evita mostrar vistas cacheadas al volver con el boton atras
+    window.addEventListener('pageshow', function (event) {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    });
+
+    // Auto-ocultar mensajes flash para que no queden fijos
+    setTimeout(function () {
+      const alerts = document.querySelectorAll('.auto-dismiss');
+      alerts.forEach(function (alert) {
+        alert.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+        alert.style.opacity = '0';
+        alert.style.transform = 'translateY(-6px)';
+        setTimeout(function () {
+          alert.remove();
+          const container = document.getElementById('flash-container');
+          if (container && !container.children.length) {
+            container.remove();
+          }
+        }, 420);
+      });
+    }, 4200);
+
+    // Toast de recordatorio de notificaciones luego del login
+    setTimeout(function () {
+      const toast = document.getElementById('notif-toast');
+      if (!toast) return;
+      const targetUrl = toast.getAttribute('data-url');
+      toast.addEventListener('click', function (event) {
+        if (event.target && event.target.closest('a')) return;
+        if (targetUrl) {
+          window.location.href = targetUrl;
+        }
+      });
+      setTimeout(function () {
+        toast.classList.add('hide');
+        setTimeout(function () {
+          toast.remove();
+        }, 240);
+      }, 10000);
+    }, 120);
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,253 @@
+{% extends "layout/base.html" %}
+{% block title %}Evaluacion de Aptitudes - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/form.css') }}">
+{% if not evaluacion_bloqueada %}
+<script async src="https://tally.so/widgets/embed.js"></script>
+{% endif %}
+<style>
+  .locked-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px;
+  }
+
+  .locked-title {
+    font-size: 20px;
+    margin: 0 0 8px 0;
+    color: var(--text1);
+  }
+
+  .locked-text {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .locked-meta {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .locked-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="form-page">
+  {% if evaluacion_bloqueada %}
+    <div class="locked-box">
+      <h1 class="locked-title">Evaluacion ya completada</h1>
+      <p class="locked-text">
+        Este formulario ya fue enviado desde tu cuenta. Para evitar respuestas duplicadas, el sistema lo mantiene bloqueado.
+      </p>
+      <div class="locked-meta">
+        {% if evaluacion_existente %}
+          <div>Fecha de envio: {{ evaluacion_existente.fecha_creacion.strftime('%Y-%m-%d %H:%M') if evaluacion_existente.fecha_creacion else '-' }}</div>
+          <div>Response ID: {{ evaluacion_existente.referencia_externa or 'sin registro externo' }}</div>
+        {% endif %}
+      </div>
+      <div class="locked-actions">
+        <a href="{{ url_for('resultado.index') }}" class="btn btn-primary btn-sm">Ver resultado</a>
+        <a href="{{ url_for('estudiante.index') }}" class="btn btn-secondary btn-sm">Volver al dashboard</a>
+      </div>
+    </div>
+  {% else %}
+    <div class="form-top-bar">
+      <div class="student-info">
+        <div class="student-avatar">
+          {{ current_user.nombre[0] | upper }}{{ current_user.apellido[0] | upper }}
+        </div>
+        <div>
+          <span style="font-weight:600;color:var(--text)">
+            {{ current_user.nombre }} {{ current_user.apellido }}
+          </span>
+          <span style="margin-left:8px;" class="badge badge-inf">Estudiante</span>
+        </div>
+      </div>
+      <div class="form-status">
+        <span class="status-dot"></span>
+        <span style="color:var(--text2)">Evaluacion en progreso</span>
+      </div>
+    </div>
+
+    <div class="form-info-bar">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.2"/>
+        <path d="M8 7v5M8 5v1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span>
+        Responde con honestidad las 50 preguntas. No hay respuestas correctas o incorrectas;
+        el sistema evaluara tu perfil de aptitudes de forma objetiva.
+      </span>
+    </div>
+
+    <div class="tally-wrapper">
+      <div class="tally-loading" id="loading">
+        <div class="spinner"></div>
+        <span style="color:var(--text2);font-size:13px">Cargando formulario de evaluacion...</span>
+      </div>
+      <iframe
+        data-tally-src="https://tally.so/r/{{ tally_form_id }}?estudiante_id={{ current_user.id }}&estudiante_email={{ current_user.email }}"
+        width="100%"
+        height="100%"
+        frameborder="0"
+        marginheight="0"
+        marginwidth="0"
+        title="Prueba de Aptitudes Cognitivas"
+        id="tally-iframe"
+      ></iframe>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if not evaluacion_bloqueada %}
+<script>
+  let submissionSent = false;
+
+  function deepFindSubmissionId(input) {
+    if (!input || typeof input !== 'object') return null;
+    const stack = [input];
+    const seen = new Set();
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node || typeof node !== 'object' || seen.has(node)) continue;
+      seen.add(node);
+
+      const direct =
+        node.submissionId ||
+        node.submission_id ||
+        node.responseId ||
+        node.response_id;
+      if (direct) return String(direct);
+
+      if (
+        node.id &&
+        (node.fields || node.answers || node.calculated || node.respondentId || node.formId)
+      ) {
+        return String(node.id);
+      }
+
+      Object.keys(node).forEach(function (key) {
+        const value = node[key];
+        if (value && typeof value === 'object') {
+          stack.push(value);
+        }
+      });
+    }
+    return null;
+  }
+
+  function extractPayloadCandidate(data) {
+    if (!data || typeof data !== 'object') return null;
+    const candidates = [
+      data.payload,
+      data.data,
+      data.formResponse,
+      data.response,
+      data.submission,
+      data
+    ];
+    for (const candidate of candidates) {
+      if (
+        candidate &&
+        typeof candidate === 'object' &&
+        (
+          candidate.fields ||
+          candidate.answers ||
+          candidate.calculated ||
+          candidate.respondentId ||
+          candidate.formId ||
+          candidate.id
+        )
+      ) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  function parseTallyMessage(data) {
+    if (!data) return null;
+
+    let objectData = data;
+    if (typeof data === 'string') {
+      try {
+        objectData = JSON.parse(data);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    if (!objectData || typeof objectData !== 'object') return null;
+
+    const eventText = String(objectData.eventName || objectData.type || objectData.event || '').toLowerCase();
+    const isSubmitEvent =
+      eventText.indexOf('submitted') !== -1 ||
+      eventText.indexOf('submit') !== -1 ||
+      eventText.indexOf('form_response') !== -1;
+
+    const payload = extractPayloadCandidate(objectData);
+    const submissionId = deepFindSubmissionId(objectData);
+    if (!isSubmitEvent && !submissionId) {
+      return null;
+    }
+    return { submissionId: submissionId, payload: payload };
+  }
+
+  const tallyIframe = document.getElementById('tally-iframe');
+  if (tallyIframe) {
+    tallyIframe.addEventListener('load', function() {
+      setTimeout(function() {
+        const loader = document.getElementById('loading');
+        if (loader) loader.classList.add('hidden');
+      }, 600);
+    });
+  }
+
+  window.addEventListener('message', function(e) {
+    if (submissionSent) return;
+    if (typeof e.origin === 'string' && e.origin.indexOf('tally.so') === -1) return;
+
+    const parsed = parseTallyMessage(e.data);
+    if (parsed && (parsed.submissionId || parsed.payload)) {
+      submissionSent = true;
+      fetch("{{ url_for('formulario.marcar_completada') }}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": "{{ csrf_token() }}"
+        },
+        body: JSON.stringify({
+          submission_id: parsed.submissionId,
+          form_id: "{{ tally_form_id }}",
+          tally_payload: parsed.payload
+        })
+      }).then(function(resp) {
+        if (!resp.ok) {
+          return resp.json().then(function(payload) {
+            throw payload;
+          });
+        }
+        return resp.json();
+      }).catch(function(err) {
+        console.warn('No se pudo registrar evaluacion en backend', err);
+      }).finally(function () {
+        window.location.href = "{{ url_for('resultado.index') }}";
+      });
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

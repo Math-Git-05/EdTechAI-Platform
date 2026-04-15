@@ -1,0 +1,216 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Editar Perfil - Admin EdTech{% endblock %}
+
+{% block admin_extra_head %}
+<style>
+  .profile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+
+  .profile-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .profile-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+  }
+
+  .profile-field input,
+  .profile-field select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--text1);
+    padding: 9px 11px;
+    font-size: 13px;
+  }
+
+  .profile-field input:focus,
+  .profile-field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+  }
+
+  .profile-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Editar Perfil</h1>
+      <p>{{ usuario.nombre }} {{ usuario.apellido }} ({{ usuario.email }})</p>
+      <p class="welcome-subtitle">Rol: {{ usuario.role }}</p>
+    </div>
+  </div>
+
+  <div class="section-actions">
+    <a href="{{ url_for('admin.usuarios') }}" class="btn-small">Volver a usuarios</a>
+  </div>
+
+  <div class="admin-section">
+    <h2>Datos de {{ "estudiante" if usuario.role == "estudiante" else "profesor" }}</h2>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="profile-grid">
+        <div class="profile-field">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" value="{{ usuario.nombre }}" required>
+        </div>
+        <div class="profile-field">
+          <label for="apellido">Apellido</label>
+          <input id="apellido" name="apellido" value="{{ usuario.apellido }}" required>
+        </div>
+
+        {% if usuario.role == "estudiante" %}
+          <div class="profile-field">
+            <label for="segundo_apellido">Segundo apellido</label>
+            <input
+              id="segundo_apellido"
+              name="segundo_apellido"
+              value="{{ student_profile.segundo_apellido if student_profile else '' }}"
+              required
+            >
+          </div>
+          <div class="profile-field">
+            <label for="student_id">RNE / Matricula</label>
+            <input
+              id="student_id"
+              name="student_id"
+              value="{{ student_profile.student_id if student_profile else '' }}"
+              placeholder="Ej: MAH06060605000601"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="gender">Genero</label>
+            <select id="gender" name="gender">
+              {% set selected_gender = student_profile.genero if student_profile else 'prefiero_no_decir' %}
+              {% for value, label in gender_options %}
+                <option value="{{ value }}" {% if selected_gender == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="profile-field">
+            <label for="fecha_nacimiento">Fecha de nacimiento</label>
+            <input
+              type="date"
+              id="fecha_nacimiento"
+              name="fecha_nacimiento"
+              value="{{ student_profile.fecha_nacimiento.strftime('%Y-%m-%d') if student_profile and student_profile.fecha_nacimiento else '' }}"
+              required
+            >
+          </div>
+          <div class="profile-field">
+            <label for="grado_nivel">Grado / Nivel</label>
+            <input
+              id="grado_nivel"
+              name="grado_nivel"
+              value="{{ student_profile.grado_nivel if student_profile else '' }}"
+              placeholder="Ej: 6to secundaria"
+              required
+            >
+          </div>
+          <div class="profile-field">
+            <label for="school_id">School ID</label>
+            <input
+              id="school_id"
+              name="school_id"
+              value="{{ student_profile.school_id if student_profile else default_school_id }}"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="enrollment_year">Ano de ingreso</label>
+            <input
+              type="number"
+              id="enrollment_year"
+              name="enrollment_year"
+              min="1990"
+              max="2100"
+              value="{{ student_profile.enrollment_year if student_profile and student_profile.enrollment_year else '' }}"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="academic_status">Estado academico</label>
+            {% set selected_status = student_profile.academic_status if student_profile else 'activo' %}
+            <select id="academic_status" name="academic_status">
+              {% for value, label in academic_status_options %}
+                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% else %}
+          <div class="profile-field">
+            <label for="employee_id">Codigo de empleado</label>
+            <input
+              id="employee_id"
+              name="employee_id"
+              value="{{ teacher_profile.employee_id if teacher_profile and teacher_profile.employee_id else '' }}"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="especialidad">Especialidad</label>
+            <input
+              id="especialidad"
+              name="especialidad"
+              value="{{ teacher_profile.especialidad if teacher_profile and teacher_profile.especialidad else '' }}"
+              placeholder="Ej: Matematica aplicada"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="departamento">Departamento</label>
+            <input
+              id="departamento"
+              name="departamento"
+              value="{{ teacher_profile.departamento if teacher_profile and teacher_profile.departamento else '' }}"
+              placeholder="Docencia"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="telefono">Telefono</label>
+            <input
+              id="telefono"
+              name="telefono"
+              value="{{ teacher_profile.telefono if teacher_profile and teacher_profile.telefono else '' }}"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="teacher_school_id">School ID</label>
+            <input
+              id="teacher_school_id"
+              name="teacher_school_id"
+              value="{{ teacher_profile.school_id if teacher_profile else default_school_id }}"
+            >
+          </div>
+          <div class="profile-field">
+            <label for="labor_status">Estado laboral</label>
+            {% set selected_labor = teacher_profile.labor_status if teacher_profile else 'activo' %}
+            <select id="labor_status" name="labor_status">
+              {% for value, label in labor_status_options %}
+                <option value="{{ value }}" {% if selected_labor == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        {% endif %}
+      </div>
+
+      <div class="profile-actions">
+        <button type="submit" class="btn-small">Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

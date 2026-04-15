@@ -1,0 +1,540 @@
+{% extends "layout/base.html" %}
+{% block title %}EdTech - Orientación Técnica Profesional{% endblock %}
+
+{% block extra_head %}
+<style>
+  .landing-hero {
+    background: linear-gradient(135deg, #0b1426 0%, #1a2a4e 50%, #2563eb 100%);
+    color: #fff;
+    padding: 80px 20px;
+    text-align: center;
+    position: relative;
+    clip-path: polygon(0 0, 100% 0, 100% 85%, 0 100%);
+  }
+
+  .landing-hero h1 {
+    font-size: 48px;
+    font-weight: 800;
+    margin-bottom: 24px;
+    background: linear-gradient(135deg, #fff, #a5d6ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .landing-hero p {
+    font-size: 20px;
+    margin-bottom: 32px;
+    opacity: 0.95;
+    max-width: 650px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 32px;
+    margin: 40px 0;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 30px 20px;
+    border-radius: 12px;
+    backdrop-filter: blur(10px);
+  }
+
+  .stat-item h3 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .stat-item p {
+    font-size: 13px;
+    opacity: 0.9;
+  }
+
+  .landing-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+
+  .section-title {
+    font-size: 36px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 48px;
+    color: var(--text1);
+  }
+
+  .how-it-works {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 24px;
+    margin: 60px 0;
+  }
+
+  .step-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+
+  .step-number {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-h));
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 auto 16px;
+  }
+
+  .step-card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text1);
+  }
+
+  .step-card p {
+    font-size: 14px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .benefits-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: center;
+    margin: 60px 0;
+  }
+
+  .benefits-content h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    color: var(--text1);
+  }
+
+  .benefit-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .benefit-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .benefit-icon svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+  }
+
+  .benefit-text h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text1);
+  }
+
+  .benefit-text p {
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .benefit-visual {
+    background: linear-gradient(135deg, var(--accent), var(--accent-h));
+    border-radius: 12px;
+    padding: 40px;
+    color: #fff;
+    text-align: center;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+  }
+
+  .benefit-visual h3 {
+    font-size: 24px;
+    margin-bottom: 32px;
+    color: #fff;
+  }
+
+  .chart-demo {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 12px;
+    height: 120px;
+  }
+
+  .chart-bar {
+    width: 40px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 8px 8px 0 0;
+    transition: all 0.3s ease;
+  }
+
+  .chart-bar.active {
+    background: rgba(255, 255, 255, 0.8);
+  }
+
+  .faq-section {
+    margin: 60px 0;
+  }
+
+  .faq-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+  }
+
+  .faq-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .faq-item h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--accent);
+  }
+
+  .faq-item p {
+    font-size: 13px;
+    color: var(--text2);
+    line-height: 1.6;
+  }
+
+  .final-cta {
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-h) 100%);
+    color: #fff;
+    padding: 60px 24px;
+    border-radius: 16px;
+    text-align: center;
+    margin: 60px 0;
+  }
+
+  .final-cta h2 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #fff;
+  }
+
+  .final-cta p {
+    font-size: 16px;
+    margin-bottom: 32px;
+    opacity: 0.95;
+  }
+
+  .cta-buttons {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .cta-btn {
+    display: inline-block;
+    padding: 14px 32px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .cta-btn-primary {
+    background: #fff;
+    color: var(--accent);
+  }
+
+  .cta-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  .cta-btn-secondary {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+
+  .cta-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    .landing-hero {
+      padding: 60px 20px;
+      clip-path: polygon(0 0, 100% 0, 100% 90%, 0 100%);
+    }
+
+    .landing-hero h1 {
+      font-size: 32px;
+    }
+
+    .landing-hero p {
+      font-size: 16px;
+    }
+
+    .stats-bar {
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
+    .section-title {
+      font-size: 28px;
+    }
+
+    .benefits-grid {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    .benefit-visual {
+      min-height: 250px;
+    }
+
+    .cta-buttons {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .cta-btn {
+      width: 100%;
+      max-width: 250px;
+      text-align: center;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="landing-hero">
+  <div class="landing-container">
+    <h1>EdTech: Tu Brújula Vocacional</h1>
+    <p>Plataforma inteligente de orientación técnica con IA que identifica la carrera ideal para tu perfil.</p>
+
+    <div class="stats-bar">
+      <div class="stat-item">
+        <h3>5000+</h3>
+        <p>Estudiantes orientados</p>
+      </div>
+      <div class="stat-item">
+        <h3>4</h3>
+        <p>Carreras técnicas</p>
+      </div>
+      <div class="stat-item">
+        <h3>50</h3>
+        <p>Preguntas inteligentes</p>
+      </div>
+      <div class="stat-item">
+        <h3>98%</h3>
+        <p>Precisión de resultados</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="landing-container">
+  <section class="how-it-works-section">
+    <h2 class="section-title">Cómo Funciona</h2>
+    <div class="how-it-works">
+      <div class="step-card">
+        <div class="step-number">1</div>
+        <h3>Regístrate</h3>
+        <p>Crea tu cuenta en menos de 1 minuto con tus datos básicos.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">2</div>
+        <h3>Responde</h3>
+        <p>Completa 50 preguntas que evalúan tus aptitudes reales.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">3</div>
+        <h3>Descubre</h3>
+        <p>Obtén un análisis detallado con tu técnico recomendado.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-number">4</div>
+        <h3>Actúa</h3>
+        <p>Toma decisiones informadas sobre tu futuro académico.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="benefits">
+    <div class="benefits-grid">
+      <div class="benefits-content">
+        <h2>Por Qué Elegir EdTech</h2>
+
+        <div class="benefit-item">
+          <div class="benefit-icon" style="background:#1a3a2a;">
+            <svg viewBox="0 0 16 16" fill="#34d399">
+              <path d="M8 1L10 6H15L11 9.5L12.5 14.5L8 11.5L3.5 14.5L5 9.5L1 6H6Z"></path>
+            </svg>
+          </div>
+          <div class="benefit-text">
+            <h4>Inteligencia Artificial</h4>
+            <p>Algoritmo avanzado que analiza patrones en miles de resultados previos.</p>
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-icon" style="background:#1e3a5f;">
+            <svg viewBox="0 0 16 16" fill="#60a5fa">
+              <circle cx="8" cy="8" r="5.5" fill="none" stroke="#60a5fa" stroke-width="1.5"></circle>
+              <path d="M8 4.5V8l2.5 1.5" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+          <div class="benefit-text">
+            <h4>Rápido y Eficiente</h4>
+            <p>Completa todo el proceso en apenas 20 minutos.</p>
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-icon" style="background:#2d1f4a;">
+            <svg viewBox="0 0 16 16" fill="#a78bfa">
+              <path d="M2 13h12" fill="none" stroke="#a78bfa" stroke-width="1.5" stroke-linecap="round"></path>
+              <rect x="3" y="8" width="2.2" height="4" rx="0.6"></rect>
+              <rect x="6.8" y="5.8" width="2.2" height="6.2" rx="0.6"></rect>
+              <rect x="10.6" y="7" width="2.2" height="5" rx="0.6"></rect>
+            </svg>
+          </div>
+          <div class="benefit-text">
+            <h4>Reporte Completo</h4>
+            <p>Visualiza gráficos de afinidad, percentiles y análisis profundos.</p>
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-icon" style="background:#1e3a5f;">
+            <svg viewBox="0 0 16 16" fill="#60a5fa">
+              <path d="M8 1.5l5.5 2.2v4.2c0 3.2-2 5.5-5.5 6.8c-3.5-1.3-5.5-3.6-5.5-6.8V3.7L8 1.5z" fill="none" stroke="#60a5fa" stroke-width="1.5"></path>
+              <path d="M5.9 8.3l1.3 1.3l2.9-2.9" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+          <div class="benefit-text">
+            <h4>100% Confidencial</h4>
+            <p>Tus datos no se comparten y se usan solo para tu análisis.</p>
+          </div>
+        </div>
+
+        <div class="benefit-item">
+          <div class="benefit-icon" style="background:#1a2f1a;">
+            <svg viewBox="0 0 16 16" fill="#4ade80">
+              <path d="M3 5.5A5 5 0 1 1 3.8 11" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round"></path>
+              <path d="M3 2.5v3h3" fill="none" stroke="#4ade80" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+          </div>
+          <div class="benefit-text">
+            <h4>Envío Único por Cuenta</h4>
+            <p>La evaluación se completa una sola vez por estudiante para asegurar trazabilidad.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="benefit-visual">
+        <h3>Tu Perfil de Aptitudes</h3>
+        <div class="chart-demo">
+          <div class="chart-bar active" style="height: 80%;"></div>
+          <div class="chart-bar" style="height: 45%;"></div>
+          <div class="chart-bar active" style="height: 70%;"></div>
+          <div class="chart-bar" style="height: 55%;"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="careers">
+    <h2 class="section-title">Técnicos Disponibles</h2>
+    <div class="how-it-works">
+      <div class="step-card" style="border-left: 4px solid #2563eb;">
+        <div class="step-number" style="background: linear-gradient(135deg, #2563eb, #1d4ed8);">1</div>
+        <h3>Informática</h3>
+        <p><strong>Desarrollo de software, análisis de sistemas, ciberseguridad, bases de datos</strong></p>
+        <p style="margin-top: 8px; font-size: 12px;">Ideal para: lógica, matemáticas y resolución de problemas.</p>
+      </div>
+      <div class="step-card" style="border-left: 4px solid #059669;">
+        <div class="step-number" style="background: linear-gradient(135deg, #059669, #047857);">2</div>
+        <h3>Enfermería</h3>
+        <p><strong>Atención de salud, cuidado del paciente y procedimientos clínicos</strong></p>
+        <p style="margin-top: 8px; font-size: 12px;">Ideal para: empatía, servicio y detalle.</p>
+      </div>
+      <div class="step-card" style="border-left: 4px solid #7c3aed;">
+        <div class="step-number" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">3</div>
+        <h3>Administración</h3>
+        <p><strong>Gestión empresarial, recursos humanos, contabilidad y finanzas</strong></p>
+        <p style="margin-top: 8px; font-size: 12px;">Ideal para: organización, liderazgo y análisis.</p>
+      </div>
+      <div class="step-card" style="border-left: 4px solid #d97706;">
+        <div class="step-number" style="background: linear-gradient(135deg, #d97706, #b45309);">4</div>
+        <h3>Comercio</h3>
+        <p><strong>Ventas, marketing, negociación, servicio al cliente</strong></p>
+        <p style="margin-top: 8px; font-size: 12px;">Ideal para: comunicación, iniciativa y orientación comercial.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="faq-section">
+    <h2 class="section-title">Preguntas Frecuentes</h2>
+    <div class="faq-grid">
+      <div class="faq-item">
+        <h4>¿Es gratis?</h4>
+        <p>Sí, la evaluación y resultados son gratuitos. Solo necesitas crear una cuenta.</p>
+      </div>
+      <div class="faq-item">
+        <h4>¿Cuánto tiempo toma?</h4>
+        <p>La evaluación completa toma entre 15 y 20 minutos.</p>
+      </div>
+      <div class="faq-item">
+        <h4>¿Qué tan preciso es?</h4>
+        <p>El sistema alcanza alta precisión basado en análisis de miles de respuestas.</p>
+      </div>
+      <div class="faq-item">
+        <h4>¿Puedo acceder desde móvil?</h4>
+        <p>Sí. EdTech está optimizado para desktop, tablet y móvil.</p>
+      </div>
+      <div class="faq-item">
+        <h4>¿Puedo repetir la evaluación?</h4>
+        <p>No. Cada cuenta puede enviar una sola evaluación para evitar respuestas duplicadas.</p>
+      </div>
+      <div class="faq-item">
+        <h4>¿Necesito ayuda?</h4>
+        <p>Contáctanos en cualquier momento. El equipo está disponible para orientarte.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="final-cta">
+    <h2>Comienza tu Viaje Hoy</h2>
+    <p>Únete a miles de estudiantes que ya descubrieron su vocación técnica.</p>
+    <div class="cta-buttons">
+      <a href="{{ url_for('auth.register') }}" class="cta-btn cta-btn-primary">Crear Cuenta Gratis</a>
+      <a href="{{ url_for('auth.login') }}" class="cta-btn cta-btn-secondary">Ya Tengo Cuenta</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

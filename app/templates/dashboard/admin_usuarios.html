@@ -1,0 +1,284 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Control de Usuarios - Admin EdTech{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page wide">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Control de Usuarios</h1>
+      <p>Gestiona roles, estado de cuenta y eliminacion de acceso, perfil academico o usuario completo.</p>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Usuarios del Sistema</h2>
+
+    <form id="usuarios-bulk-form" method="POST" action="{{ url_for('admin.usuarios_accion_masiva') }}" class="bulk-form" style="margin-bottom:12px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="confirm_token" id="usuarios-bulk-confirm-token" value="">
+      <div class="bulk-controls">
+        <div>
+          <label for="accion_usuarios">Accion masiva</label>
+          <select id="accion_usuarios" name="accion_usuarios" class="table-select">
+            <option value="desactivar_acceso">Desactivar acceso</option>
+            <option value="eliminar_acceso">Eliminar acceso</option>
+            <option value="eliminar_perfil">Eliminar perfil academico</option>
+            <option value="eliminar_usuario">Eliminar usuario completo</option>
+          </select>
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-primary btn-sm">Aplicar seleccion</button>
+        </div>
+      </div>
+    </form>
+
+    <div class="table-search">
+      <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+      <input
+        type="search"
+        id="search-usuarios-admin"
+        class="table-search-input"
+        placeholder="Buscar usuario por nombre, RNE, correo o rol..."
+      >
+    </div>
+    <p id="search-usuarios-admin-result" class="table-search-result"></p>
+
+    {% if usuarios %}
+      <div class="users-table">
+        <table id="tabla-usuarios-admin">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="users-select-all"></th>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Rol</th>
+              <th>Estado</th>
+              <th>Verificacion</th>
+              <th>Perfil</th>
+              <th>Acciones</th>
+              <th>Registro</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in usuarios %}
+              <tr data-search="{{ (user.nombre ~ ' ' ~ user.apellido ~ ' ' ~ user.email ~ ' ' ~ user.role ~ ' ' ~ (user.student_profile.student_id if user.student_profile else '') ~ ' ' ~ ('activo' if user.activo else 'inactivo')) | lower }}">
+                <td>
+                  {% if user.id != current_user.id %}
+                    <input type="checkbox" name="user_ids" value="{{ user.id }}" form="usuarios-bulk-form" class="user-check">
+                  {% else %}
+                    <span class="badge-secondary">-</span>
+                  {% endif %}
+                </td>
+                <td>{{ user.nombre }} {{ user.apellido }}</td>
+                <td>{{ user.email }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_rol', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="role" class="table-select">
+                      <option value="estudiante" {% if user.role == 'estudiante' %}selected{% endif %}>estudiante</option>
+                      <option value="profesor" {% if user.role == 'profesor' %}selected{% endif %}>profesor</option>
+                      <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>admin</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_estado', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="activo" class="table-select">
+                      <option value="1" {% if user.activo %}selected{% endif %}>Activo</option>
+                      <option value="0" {% if not user.activo %}selected{% endif %}>Inactivo</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="POST" action="{{ url_for('admin.actualizar_verificacion', user_id=user.id) }}" class="table-form compact">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <select name="email_verificado" class="table-select">
+                      <option value="1" {% if user.email_verificado %}selected{% endif %}>Verificado</option>
+                      <option value="0" {% if not user.email_verificado %}selected{% endif %}>No verificado</option>
+                    </select>
+                    <button type="submit" class="btn-small">Guardar</button>
+                  </form>
+                </td>
+                <td>
+                  {% if user.role in ['estudiante', 'profesor'] %}
+                    <a href="{{ url_for('admin.editar_perfil_usuario', user_id=user.id) }}" class="btn-small">Editar perfil</a>
+                  {% else %}
+                    <span class="badge-secondary">N/A</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if user.id != current_user.id %}
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                      <form
+                        method="POST"
+                        action="{{ url_for('admin.eliminar_usuario_login', user_id=user.id) }}"
+                        class="table-form compact js-danger-action"
+                        data-confirm-message="Vas a eliminar el acceso de este usuario. El perfil academico se conservara. Deseas continuar?"
+                      >
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="confirm_token" value="">
+                        <button type="submit" class="btn-small btn-danger">Eliminar acceso</button>
+                      </form>
+
+                      {% if user.role in ['estudiante', 'profesor'] %}
+                        <form
+                          method="POST"
+                          action="{{ url_for('admin.eliminar_perfil_academico', user_id=user.id) }}"
+                          class="table-form compact js-danger-action"
+                          data-confirm-message="Vas a eliminar el perfil academico del usuario. Deseas continuar?"
+                        >
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="confirm_token" value="">
+                          <button type="submit" class="btn-small btn-danger">Eliminar perfil</button>
+                        </form>
+                      {% endif %}
+
+                      {% if user.role != 'admin' %}
+                        <form
+                          method="POST"
+                          action="{{ url_for('admin.eliminar_usuario_completo', user_id=user.id) }}"
+                          class="table-form compact js-danger-action"
+                          data-confirm-message="Vas a eliminar completamente este usuario y sus registros asociados. Deseas continuar?"
+                        >
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                          <input type="hidden" name="confirm_token" value="">
+                          <button type="submit" class="btn-small btn-danger">Eliminar usuario</button>
+                        </form>
+                      {% else %}
+                        <span class="badge-secondary">Admin protegido</span>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <span class="badge-secondary">Tu cuenta</span>
+                  {% endif %}
+                </td>
+                <td>{{ user.fecha_creacion.strftime('%Y-%m-%d') if user.fecha_creacion else '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay usuarios para administrar.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  function attachTableSearch(inputId, tableId, resultId) {
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    const result = document.getElementById(resultId);
+    if (!input || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (input.value || '').trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const text = (row.dataset.search || row.innerText || '').toLowerCase();
+        const match = !query || text.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+      if (result) {
+        result.textContent = `${visible} de ${rows.length} registro(s)`;
+      }
+    };
+
+    input.addEventListener('input', runFilter);
+    runFilter();
+  }
+
+  function runDoubleConfirmation(message) {
+    const first = window.confirm(message);
+    if (!first) return '';
+    const second = window.prompt('Confirma escribiendo ELIMINAR');
+    if ((second || '').trim().toUpperCase() !== 'ELIMINAR') {
+      window.alert('Confirmacion invalida. No se aplicaron cambios.');
+      return '';
+    }
+    return 'ELIMINAR';
+  }
+
+  function attachRowDangerConfirmations() {
+    const forms = document.querySelectorAll('.js-danger-action');
+    forms.forEach((form) => {
+      form.addEventListener('submit', (event) => {
+        const message = form.dataset.confirmMessage || 'Esta accion es irreversible. Deseas continuar?';
+        const token = runDoubleConfirmation(message);
+        if (!token) {
+          event.preventDefault();
+          return;
+        }
+        const tokenInput = form.querySelector('input[name="confirm_token"]');
+        if (tokenInput) tokenInput.value = token;
+      });
+    });
+  }
+
+  function attachBulkSelection() {
+    const selectAll = document.getElementById('users-select-all');
+    if (!selectAll) return;
+    selectAll.addEventListener('change', () => {
+      const checked = !!selectAll.checked;
+      document.querySelectorAll('.user-check').forEach((box) => {
+        box.checked = checked;
+      });
+    });
+  }
+
+  function attachBulkSubmitGuard() {
+    const form = document.getElementById('usuarios-bulk-form');
+    const actionSelect = document.getElementById('accion_usuarios');
+    const tokenInput = document.getElementById('usuarios-bulk-confirm-token');
+    if (!form || !actionSelect) return;
+
+    const actionLabels = {
+      desactivar_acceso: 'desactivar acceso',
+      eliminar_acceso: 'eliminar acceso',
+      eliminar_perfil: 'eliminar perfil academico',
+      eliminar_usuario: 'eliminar usuario completo',
+    };
+    const destructive = new Set(['eliminar_acceso', 'eliminar_perfil', 'eliminar_usuario']);
+
+    form.addEventListener('submit', (event) => {
+      const selected = Array.from(document.querySelectorAll('.user-check:checked'));
+      if (!selected.length) {
+        event.preventDefault();
+        window.alert('Selecciona al menos un usuario para la accion masiva.');
+        return;
+      }
+
+      const action = (actionSelect.value || '').trim().toLowerCase();
+      if (!action) {
+        event.preventDefault();
+        window.alert('Selecciona una accion masiva valida.');
+        return;
+      }
+
+      if (destructive.has(action)) {
+        const message = `Vas a aplicar la accion "${actionLabels[action] || action}" sobre ${selected.length} usuario(s). Deseas continuar?`;
+        const token = runDoubleConfirmation(message);
+        if (!token) {
+          event.preventDefault();
+          return;
+        }
+        if (tokenInput) tokenInput.value = token;
+      } else if (tokenInput) {
+        tokenInput.value = '';
+      }
+    });
+  }
+
+  attachTableSearch('search-usuarios-admin', 'tabla-usuarios-admin', 'search-usuarios-admin-result');
+  attachRowDangerConfirmations();
+  attachBulkSelection();
+  attachBulkSubmitGuard();
+</script>
+{% endblock %}

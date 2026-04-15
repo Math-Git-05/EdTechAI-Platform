@@ -1,0 +1,100 @@
+{% extends "layout/base.html" %}
+{% block title %}Perfil Profesor - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Editar Perfil de Profesor</h1>
+      <p>Los cambios se envian al administrador para aprobacion.</p>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Datos Profesionales</h2>
+    <form method="POST" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" class="table-select" value="{{ current_user.nombre }}" required>
+        </div>
+        <div>
+          <label for="apellido">Apellido</label>
+          <input id="apellido" name="apellido" class="table-select" value="{{ current_user.apellido }}" required>
+        </div>
+        <div>
+          <label for="employee_id">Codigo empleado</label>
+          <input id="employee_id" name="employee_id" class="table-select" value="{{ profile.employee_id or '' }}">
+        </div>
+        <div>
+          <label for="especialidad">Especialidad</label>
+          <input id="especialidad" name="especialidad" class="table-select" value="{{ profile.especialidad or '' }}">
+        </div>
+        <div>
+          <label for="departamento">Departamento</label>
+          <input id="departamento" name="departamento" class="table-select" value="{{ profile.departamento or '' }}">
+        </div>
+        <div>
+          <label for="telefono">Telefono</label>
+          <input id="telefono" name="telefono" class="table-select" value="{{ profile.telefono or '' }}">
+        </div>
+        <div>
+          <label for="school_id">School ID</label>
+          <input id="school_id" name="school_id" class="table-select" value="{{ profile.school_id or '10-03-00092' }}">
+        </div>
+        <div>
+          <label for="labor_status">Estado laboral</label>
+          <select id="labor_status" name="labor_status" class="table-select">
+            <option value="activo" {% if profile.labor_status == 'activo' %}selected{% endif %}>Activo</option>
+            <option value="inactivo" {% if profile.labor_status == 'inactivo' %}selected{% endif %}>Inactivo</option>
+          </select>
+        </div>
+      </div>
+      <div class="section-actions">
+        <button type="submit" class="btn btn-primary btn-sm">Enviar solicitud</button>
+        <a href="{{ url_for('profesor.index') }}" class="btn btn-secondary btn-sm">Volver</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-section">
+    <h2>Estado de Solicitudes</h2>
+    {% if pending_request %}
+      <p>Tienes una solicitud pendiente desde {{ pending_request.requested_at.strftime('%Y-%m-%d %H:%M') if pending_request.requested_at else '-' }}.</p>
+    {% else %}
+      <p>No tienes solicitudes pendientes.</p>
+    {% endif %}
+    {% if request_history %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Estado</th>
+              <th>Solicitada</th>
+              <th>Revisada</th>
+              <th>Nota admin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for req in request_history %}
+              <tr>
+                <td>#{{ req.id }}</td>
+                <td>{{ req.status }}</td>
+                <td>{{ req.requested_at.strftime('%Y-%m-%d %H:%M') if req.requested_at else '-' }}</td>
+                <td>{{ req.reviewed_at.strftime('%Y-%m-%d %H:%M') if req.reviewed_at else '-' }}</td>
+                <td>{{ req.admin_note or '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

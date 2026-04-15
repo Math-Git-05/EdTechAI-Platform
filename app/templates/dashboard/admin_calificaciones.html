@@ -1,0 +1,620 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Calificaciones - Admin EdTech{% endblock %}
+{% block admin_extra_head %}
+<style>
+  .grade-batch-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .calif-subnav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+
+  .calif-tab {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text2);
+    border-radius: 8px;
+    padding: 7px 11px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .calif-tab.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+
+  .calif-panel {
+    display: none;
+  }
+
+  .calif-panel.active {
+    display: block;
+  }
+
+  .grade-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg2);
+    padding: 14px;
+  }
+
+  .grade-card-head {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 10px;
+  }
+
+  .grade-card-head label,
+  .grade-period label {
+    display: block;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .grade-remove-wrap {
+    display: flex;
+    align-items: end;
+    justify-content: flex-end;
+    min-height: 36px;
+  }
+
+  .grade-periods {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(200px, 1fr));
+    gap: 10px;
+  }
+
+  .grade-period {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    background: var(--surface);
+  }
+
+  .grade-period h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--text1);
+  }
+
+  .grade-period-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .grade-period.is-disabled {
+    opacity: .55;
+  }
+
+  .grade-period.is-disabled h4 {
+    color: var(--text2);
+  }
+
+  @media (max-width: 1100px) {
+    .grade-periods {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .grade-card-head {
+      grid-template-columns: 1fr;
+    }
+
+    .grade-period-fields {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page wide">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Calificaciones Academicas</h1>
+      <p>Registra calificaciones por lotes de asignaturas y periodos para cada estudiante.</p>
+    </div>
+  </div>
+
+  <div class="calif-subnav">
+    <button type="button" class="calif-tab active" data-panel="sync">Submissions Tally</button>
+    <button type="button" class="calif-tab" data-panel="lote">Registro por lotes</button>
+    <button type="button" class="calif-tab" data-panel="promedios">Promedios academicos</button>
+    <button type="button" class="calif-tab" data-panel="registros">Calificaciones registradas</button>
+  </div>
+
+  <div class="admin-section calif-panel active" data-panel="sync">
+    <h2>Sincronizacion de Submissions Tally</h2>
+    {% if submissions_sheet_url %}
+      <div class="section-actions">
+        <a href="{{ submissions_sheet_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">
+          Abrir hoja de submissions
+        </a>
+      </div>
+    {% endif %}
+    <form method="POST" action="{{ url_for('admin.sincronizar_submission_tally') }}" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="submission_id_sync">Submission ID (Tally)</label>
+          <input id="submission_id_sync" name="submission_id" class="table-select" placeholder="Opcional: vJ8qA1k...">
+        </div>
+        <div>
+          <label for="submission_student_sync">Estudiante (si no existe evaluacion previa)</label>
+          <select id="submission_student_sync" name="estudiante_id" class="table-select">
+            <option value="">Auto detectar por submission</option>
+            {% for est in estudiantes %}
+              <option value="{{ est.id }}">
+                {{ est.nombre }} {{ est.apellido }} {% if est.student_profile %}- {{ est.student_profile.student_id }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-secondary btn-sm">Sincronizar desde Tally</button>
+        </div>
+      </div>
+      <p class="text-muted text-small">Puedes sincronizar por Submission ID o solo por estudiante (usando matricula/RNE).</p>
+    </form>
+    <form method="POST" action="{{ url_for('admin.limpiar_duplicados_evaluaciones') }}" style="margin-top:10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-secondary btn-sm">Limpiar duplicados locales de evaluaciones</button>
+    </form>
+    <form method="POST" action="{{ url_for('admin.completar_scores_tally') }}" style="margin-top:10px;" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="reprocess_limit">Evaluaciones a revisar</label>
+          <input id="reprocess_limit" type="number" min="1" max="1000" name="limit" class="table-select" value="300">
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-secondary btn-sm">Reprocesar scores faltantes</button>
+        </div>
+      </div>
+      <p class="text-muted text-small">Completa scores pendientes consultando Tally API y hoja CSV por submission/matricula.</p>
+    </form>
+    <form method="POST" action="{{ url_for('admin.recalcular_promedios_academicos') }}" style="margin-top:10px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-secondary btn-sm">Recalcular promedios academicos</button>
+    </form>
+  </div>
+
+  <div class="admin-section calif-panel" data-panel="lote">
+    <h2>Registro por Lotes</h2>
+    <form method="POST" action="{{ url_for('admin.crear_calificacion') }}" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="estudiante_id_grade">Estudiante</label>
+          <select id="estudiante_id_grade" name="estudiante_id" class="table-select" required>
+            <option value="">Seleccionar estudiante</option>
+            {% for est in estudiantes %}
+              <option value="{{ est.id }}">
+                {{ est.nombre }} {{ est.apellido }} {% if est.student_profile %}- {{ est.student_profile.student_id }}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="anio_grade">Ano</label>
+          <select id="anio_grade" name="anio" class="table-select">
+            {% for year in year_options %}
+              <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="calificaciones-lote-body" class="grade-batch-list">
+        <div class="grade-card">
+          <div class="grade-card-head">
+            <div>
+              <label>Asignatura</label>
+              <select name="asignatura[]" class="table-select" required>
+                <option value="">Seleccionar asignatura</option>
+                {% for asignatura in asignaturas_predefinidas %}
+                  <option value="{{ asignatura }}">{{ asignatura }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Cantidad periodos</label>
+              <select name="cantidad_periodos[]" class="table-select period-count" required>
+                <option value="1" selected>1 periodo</option>
+                <option value="2">2 periodos</option>
+                <option value="3">3 periodos</option>
+                <option value="4">4 periodos</option>
+              </select>
+            </div>
+            <div class="grade-remove-wrap">
+              <button type="button" class="btn-small btn-remove-row" disabled>Quitar</button>
+            </div>
+          </div>
+
+          <div class="grade-periods">
+            <div class="grade-period period-1-block">
+              <h4>Periodo 1</h4>
+              <div class="grade-period-fields">
+                <div>
+                  <label>Calificacion</label>
+                  <input name="valor_p1[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-1" placeholder="0-100" required>
+                </div>
+                <div>
+                  <label>Observacion</label>
+                  <input name="observacion_p1[]" class="table-select period-input period-1" placeholder="Obs. periodo 1">
+                </div>
+              </div>
+            </div>
+            <div class="grade-period period-2-block">
+              <h4>Periodo 2</h4>
+              <div class="grade-period-fields">
+                <div>
+                  <label>Calificacion</label>
+                  <input name="valor_p2[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-2" placeholder="0-100">
+                </div>
+                <div>
+                  <label>Observacion</label>
+                  <input name="observacion_p2[]" class="table-select period-input period-2" placeholder="Obs. periodo 2">
+                </div>
+              </div>
+            </div>
+            <div class="grade-period period-3-block">
+              <h4>Periodo 3</h4>
+              <div class="grade-period-fields">
+                <div>
+                  <label>Calificacion</label>
+                  <input name="valor_p3[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-3" placeholder="0-100">
+                </div>
+                <div>
+                  <label>Observacion</label>
+                  <input name="observacion_p3[]" class="table-select period-input period-3" placeholder="Obs. periodo 3">
+                </div>
+              </div>
+            </div>
+            <div class="grade-period period-4-block">
+              <h4>Periodo 4</h4>
+              <div class="grade-period-fields">
+                <div>
+                  <label>Calificacion</label>
+                  <input name="valor_p4[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-4" placeholder="0-100">
+                </div>
+                <div>
+                  <label>Observacion</label>
+                  <input name="observacion_p4[]" class="table-select period-input period-4" placeholder="Obs. periodo 4">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-actions">
+        <button type="button" id="btn-add-calificacion-row" class="btn btn-secondary btn-sm">Agregar asignatura</button>
+        <button type="submit" class="btn btn-primary btn-sm">Guardar lote</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-section calif-panel" data-panel="promedios">
+    <h2>Promedios Academicos</h2>
+    <div class="table-search">
+      <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+      <input
+        type="search"
+        id="search-promedios-calif"
+        class="table-search-input"
+        placeholder="Buscar por estudiante, RNE, profesor o ano..."
+      >
+    </div>
+    <p id="search-promedios-calif-result" class="table-search-result"></p>
+    {% if promedios_calificaciones %}
+      <div class="users-table">
+        <table id="tabla-promedios-calif">
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>Profesor asignado</th>
+              <th>Matematicas</th>
+              <th>Lenguas</th>
+              <th>Ciencias</th>
+              <th>Promedio general</th>
+              <th>Ano</th>
+              <th>Cantidad periodos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for promedio in promedios_calificaciones %}
+              <tr data-search="{{ (promedio.estudiante.nombre ~ ' ' ~ promedio.estudiante.apellido ~ ' ' ~ (promedio.estudiante.student_profile.student_id if promedio.estudiante.student_profile else '') ~ ' ' ~ ((promedio.estudiante.profesor.nombre ~ ' ' ~ promedio.estudiante.profesor.apellido) if promedio.estudiante.profesor else 'sin profesor') ~ ' ' ~ (promedio.anio or '')) | lower }}">
+                <td>{{ promedio.estudiante.nombre }} {{ promedio.estudiante.apellido }}</td>
+                <td>
+                  {% if promedio.estudiante.profesor %}
+                    {{ promedio.estudiante.profesor.nombre }} {{ promedio.estudiante.profesor.apellido }}
+                  {% else %}
+                    <span class="badge-secondary">Sin asignar</span>
+                  {% endif %}
+                </td>
+                <td>{{ '%.2f'|format(promedio.math_average) if promedio.math_average is not none else '-' }}</td>
+                <td>{{ '%.2f'|format(promedio.language_average) if promedio.language_average is not none else '-' }}</td>
+                <td>{{ '%.2f'|format(promedio.science_average) if promedio.science_average is not none else '-' }}</td>
+                <td>{{ '%.2f'|format(promedio.overall_average) if promedio.overall_average is not none else '-' }}</td>
+                <td>{{ promedio.anio or '-' }}</td>
+                <td>{{ promedio.cantidad }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">Aun no hay promedios calculados.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section calif-panel" data-panel="registros">
+    <h2>Calificaciones Registradas</h2>
+    <div class="table-search">
+      <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+      <input
+        type="search"
+        id="search-registros-calif"
+        class="table-search-input"
+        placeholder="Buscar por estudiante, RNE, profesor, asignatura, periodo o ano..."
+      >
+    </div>
+    <p id="search-registros-calif-result" class="table-search-result"></p>
+    {% if calificaciones_recientes %}
+      <div class="users-table">
+        <table id="tabla-registros-calif">
+          <thead>
+            <tr>
+              <th>Estudiante</th>
+              <th>Profesor asignado</th>
+              <th>Asignatura</th>
+              <th>Periodo</th>
+              <th>Ano</th>
+              <th>Valor</th>
+              <th>Observaciones</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cal in calificaciones_recientes %}
+              <tr data-search="{{ (cal.estudiante_calificado.nombre ~ ' ' ~ cal.estudiante_calificado.apellido ~ ' ' ~ (cal.estudiante_calificado.student_profile.student_id if cal.estudiante_calificado.student_profile else '') ~ ' ' ~ ((cal.estudiante_calificado.profesor.nombre ~ ' ' ~ cal.estudiante_calificado.profesor.apellido) if cal.estudiante_calificado.profesor else 'sin profesor') ~ ' ' ~ cal.asignatura ~ ' ' ~ (periodo_labels.get(cal.periodo, cal.periodo or '')) ~ ' ' ~ (cal.anio or '')) | lower }}">
+                <td>{{ cal.estudiante_calificado.nombre }} {{ cal.estudiante_calificado.apellido }}</td>
+                <td>
+                  {% if cal.estudiante_calificado.profesor %}
+                    {{ cal.estudiante_calificado.profesor.nombre }} {{ cal.estudiante_calificado.profesor.apellido }}
+                  {% else %}
+                    <span class="badge-secondary">Sin asignar</span>
+                  {% endif %}
+                </td>
+                <td>{{ cal.asignatura }}</td>
+                <td>
+                  {{ periodo_labels.get(cal.periodo, cal.periodo or '-') }}
+                </td>
+                <td>{{ cal.anio or '-' }}</td>
+                <td>{{ '%.2f'|format(cal.valor) }}</td>
+                <td>{{ cal.observaciones or '-' }}</td>
+                <td>
+                  <div style="display:flex; gap:8px;">
+                    <a href="{{ url_for('admin.editar_calificacion', calificacion_id=cal.id) }}" class="btn-small">Editar</a>
+                    <form method="POST" action="{{ url_for('admin.eliminar_calificacion', calificacion_id=cal.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit" class="btn-small">Eliminar</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">Aun no hay calificaciones registradas.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  const tabButtons = Array.from(document.querySelectorAll('.calif-tab'));
+  const tabPanels = Array.from(document.querySelectorAll('.calif-panel'));
+  const tbody = document.getElementById('calificaciones-lote-body');
+  const addBtn = document.getElementById('btn-add-calificacion-row');
+
+  function activatePanel(panelId) {
+    tabButtons.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.panel === panelId);
+    });
+    tabPanels.forEach((panel) => {
+      panel.classList.toggle('active', panel.dataset.panel === panelId);
+    });
+  }
+
+  tabButtons.forEach((btn) => {
+    btn.addEventListener('click', function () {
+      activatePanel(btn.dataset.panel || 'sync');
+    });
+  });
+
+  function buildRow() {
+    const row = document.createElement('div');
+    row.className = 'grade-card';
+    row.innerHTML = `
+      <div class="grade-card-head">
+        <div>
+          <label>Asignatura</label>
+          <select name="asignatura[]" class="table-select" required>
+            <option value="">Seleccionar asignatura</option>
+            {% for asignatura in asignaturas_predefinidas %}
+              <option value="{{ asignatura }}">{{ asignatura }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Cantidad periodos</label>
+          <select name="cantidad_periodos[]" class="table-select period-count" required>
+            <option value="1" selected>1 periodo</option>
+            <option value="2">2 periodos</option>
+            <option value="3">3 periodos</option>
+            <option value="4">4 periodos</option>
+          </select>
+        </div>
+        <div class="grade-remove-wrap">
+          <button type="button" class="btn-small btn-remove-row">Quitar</button>
+        </div>
+      </div>
+      <div class="grade-periods">
+        <div class="grade-period period-1-block">
+          <h4>Periodo 1</h4>
+          <div class="grade-period-fields">
+            <div>
+              <label>Calificacion</label>
+              <input name="valor_p1[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-1" placeholder="0-100" required>
+            </div>
+            <div>
+              <label>Observacion</label>
+              <input name="observacion_p1[]" class="table-select period-input period-1" placeholder="Obs. periodo 1">
+            </div>
+          </div>
+        </div>
+        <div class="grade-period period-2-block">
+          <h4>Periodo 2</h4>
+          <div class="grade-period-fields">
+            <div>
+              <label>Calificacion</label>
+              <input name="valor_p2[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-2" placeholder="0-100">
+            </div>
+            <div>
+              <label>Observacion</label>
+              <input name="observacion_p2[]" class="table-select period-input period-2" placeholder="Obs. periodo 2">
+            </div>
+          </div>
+        </div>
+        <div class="grade-period period-3-block">
+          <h4>Periodo 3</h4>
+          <div class="grade-period-fields">
+            <div>
+              <label>Calificacion</label>
+              <input name="valor_p3[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-3" placeholder="0-100">
+            </div>
+            <div>
+              <label>Observacion</label>
+              <input name="observacion_p3[]" class="table-select period-input period-3" placeholder="Obs. periodo 3">
+            </div>
+          </div>
+        </div>
+        <div class="grade-period period-4-block">
+          <h4>Periodo 4</h4>
+          <div class="grade-period-fields">
+            <div>
+              <label>Calificacion</label>
+              <input name="valor_p4[]" type="number" min="0" max="100" step="0.01" class="table-select period-input period-4" placeholder="0-100">
+            </div>
+            <div>
+              <label>Observacion</label>
+              <input name="observacion_p4[]" class="table-select period-input period-4" placeholder="Obs. periodo 4">
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    return row;
+  }
+
+  if (addBtn && tbody) {
+    addBtn.addEventListener('click', function () {
+      tbody.appendChild(buildRow());
+      refreshRemoveButtons();
+    });
+  }
+
+  function refreshRemoveButtons() {
+    const rows = Array.from(tbody.querySelectorAll('.grade-card'));
+    rows.forEach((row, idx) => {
+      const btn = row.querySelector('.btn-remove-row');
+      if (!btn) return;
+      btn.disabled = rows.length === 1;
+      btn.onclick = function () {
+        if (rows.length === 1) return;
+        row.remove();
+        refreshRemoveButtons();
+      };
+    });
+    refreshPeriodInputs();
+  }
+
+  function refreshPeriodInputs() {
+    if (!tbody) return;
+    Array.from(tbody.querySelectorAll('.grade-card')).forEach((row) => {
+      const countSelect = row.querySelector('.period-count');
+      const count = countSelect ? parseInt(countSelect.value || '1', 10) : 1;
+      for (let p = 1; p <= 4; p += 1) {
+        const block = row.querySelector(`.period-${p}-block`);
+        const inputs = row.querySelectorAll(`.period-${p}`);
+        const enabled = p <= count;
+        if (block) {
+          block.classList.toggle('is-disabled', !enabled);
+        }
+        inputs.forEach((input) => {
+          input.disabled = !enabled;
+          if (!enabled) {
+            input.required = false;
+            input.value = '';
+          } else if (String(input.name || '').indexOf('valor_') === 0) {
+            input.required = true;
+          }
+        });
+      }
+      if (countSelect && !countSelect.dataset.bound) {
+        countSelect.addEventListener('change', refreshPeriodInputs);
+        countSelect.dataset.bound = '1';
+      }
+    });
+  }
+
+  function attachTableSearch(inputId, tableId, resultId) {
+    const input = document.getElementById(inputId);
+    const table = document.getElementById(tableId);
+    const result = document.getElementById(resultId);
+    if (!input || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (input.value || '').trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const text = (row.dataset.search || row.innerText || '').toLowerCase();
+        const match = !query || text.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+      if (result) {
+        result.textContent = `${visible} de ${rows.length} registro(s)`;
+      }
+    };
+    input.addEventListener('input', runFilter);
+    runFilter();
+  }
+
+  if (tbody) refreshRemoveButtons();
+  activatePanel('sync');
+  attachTableSearch('search-promedios-calif', 'tabla-promedios-calif', 'search-promedios-calif-result');
+  attachTableSearch('search-registros-calif', 'tabla-registros-calif', 'search-registros-calif-result');
+</script>
+{% endblock %}

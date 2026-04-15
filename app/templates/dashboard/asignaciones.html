@@ -1,0 +1,139 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Asignaciones - Admin EdTech{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page wide">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Asignacion Masiva</h1>
+      <p>Selecciona multiples estudiantes y aplica asignacion de profesor o seccion en un solo paso.</p>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Gestor de Asignaciones</h2>
+    <form method="POST" action="{{ url_for('admin.asignacion_masiva') }}" class="bulk-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls">
+        <div>
+          <label for="accion">Accion</label>
+          <select id="accion" name="accion" class="table-select">
+            <option value="asignar">Asignar profesor</option>
+            <option value="desasignar">Quitar asignacion</option>
+          </select>
+        </div>
+        <div>
+          <label for="profesor_id">Profesor</label>
+          <select id="profesor_id" name="profesor_id" class="table-select">
+            <option value="">Seleccionar profesor</option>
+            {% for profesor in profesores %}
+              <option value="{{ profesor.id }}">{{ profesor.nombre }} {{ profesor.apellido }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="seccion">Seccion (opcional)</label>
+          <select id="seccion" name="seccion" class="table-select">
+            <option value="">Sin seccion</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+            <option value="E">E</option>
+          </select>
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-primary">Aplicar cambios</button>
+        </div>
+      </div>
+
+      <div class="table-search">
+        <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+        <input
+          type="search"
+          id="search-asignaciones-masiva"
+          class="table-search-input"
+          placeholder="Buscar estudiante, RNE, correo, seccion o profesor actual..."
+        >
+      </div>
+      <p id="search-asignaciones-masiva-result" class="table-search-result"></p>
+
+      {% if estudiantes %}
+        <div class="users-table">
+          <table id="tabla-asignaciones-masiva">
+            <thead>
+              <tr>
+                <th style="width:42px;">
+                  <input type="checkbox" id="select-all-estudiantes">
+                </th>
+                <th>Estudiante</th>
+                <th>RNE</th>
+                <th>Correo</th>
+                <th>Seccion</th>
+                <th>Profesor actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for estudiante in estudiantes %}
+                <tr data-search="{{ (estudiante.nombre ~ ' ' ~ estudiante.apellido ~ ' ' ~ estudiante.email ~ ' ' ~ (estudiante.student_profile.student_id if estudiante.student_profile else '') ~ ' ' ~ (estudiante.seccion or '') ~ ' ' ~ ((estudiante.profesor.nombre ~ ' ' ~ estudiante.profesor.apellido) if estudiante.profesor else 'sin asignar')) | lower }}">
+                  <td>
+                    <input type="checkbox" name="estudiante_ids" value="{{ estudiante.id }}" class="estudiante-check">
+                  </td>
+                  <td>{{ estudiante.nombre }} {{ estudiante.apellido }}</td>
+                  <td>{{ estudiante.student_profile.student_id if estudiante.student_profile else '-' }}</td>
+                  <td>{{ estudiante.email }}</td>
+                  <td>{{ estudiante.seccion or '-' }}</td>
+                  <td>
+                    {% if estudiante.profesor %}
+                      {{ estudiante.profesor.nombre }} {{ estudiante.profesor.apellido }}
+                    {% else %}
+                      <span class="badge-secondary">Sin asignar</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="empty-state">No hay estudiantes para asignar.</p>
+      {% endif %}
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  const selectAll = document.getElementById('select-all-estudiantes');
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.estudiante-check').forEach((el) => {
+        el.checked = selectAll.checked;
+      });
+    });
+  }
+
+  const searchInput = document.getElementById('search-asignaciones-masiva');
+  const resultLabel = document.getElementById('search-asignaciones-masiva-result');
+  const bulkTable = document.getElementById('tabla-asignaciones-masiva');
+  if (searchInput && bulkTable) {
+    const rows = Array.from(bulkTable.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (searchInput.value || '').trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const text = (row.dataset.search || row.innerText || '').toLowerCase();
+        const match = !query || text.includes(query);
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+      if (resultLabel) {
+        resultLabel.textContent = `${visible} de ${rows.length} estudiante(s)`;
+      }
+    };
+    searchInput.addEventListener('input', runFilter);
+    runFilter();
+  }
+</script>
+{% endblock %}

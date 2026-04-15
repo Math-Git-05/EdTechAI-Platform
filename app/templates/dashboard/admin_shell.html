@@ -1,0 +1,141 @@
+{% extends "layout/base.html" %}
+{% block title %}Dashboard Admin - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<style>
+  .admin-layout .sidebar {
+    width: 250px;
+    transition: width .2s ease, padding .2s ease;
+    overflow: hidden;
+  }
+
+  .admin-main {
+    width: 100%;
+  }
+
+  .admin-page {
+    max-width: 1380px;
+    margin: 0 auto;
+    padding: 16px;
+  }
+
+  .admin-page.wide {
+    max-width: 1600px;
+  }
+
+  .admin-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 12px 0;
+  }
+
+  .admin-toggle-btn {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .admin-toggle-btn:hover {
+    background: var(--surface2);
+  }
+
+  .admin-layout.sidebar-collapsed .sidebar {
+    width: 72px;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .admin-layout.sidebar-collapsed .sidebar-section,
+  .admin-layout.sidebar-collapsed .sidebar-label {
+    display: none;
+  }
+
+  .admin-layout.sidebar-collapsed .sidebar-link {
+    justify-content: center;
+  }
+
+  .admin-layout.sidebar-collapsed .sidebar-icon {
+    width: auto;
+  }
+
+  @media (max-width: 768px) {
+    .admin-toolbar {
+      margin-top: 0;
+    }
+  }
+</style>
+{% block admin_extra_head %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+<div class="layout-with-sidebar admin-layout" id="admin-layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">Panel Admin</div>
+    <a href="{{ url_for('admin.index') }}" class="sidebar-link {% if admin_active == 'home' %}active{% endif %}">
+      <span class="sidebar-icon">H</span>
+      <span class="sidebar-label">Home</span>
+    </a>
+    <a href="{{ url_for('admin.solicitudes') }}" class="sidebar-link {% if admin_active == 'solicitudes' %}active{% endif %}">
+      <span class="sidebar-icon">S</span>
+      <span class="sidebar-label">Solicitudes</span>
+    </a>
+    <a href="{{ url_for('admin.asignaciones') }}" class="sidebar-link {% if admin_active == 'asignaciones' %}active{% endif %}">
+      <span class="sidebar-icon">A</span>
+      <span class="sidebar-label">Asignaciones</span>
+    </a>
+    <a href="{{ url_for('admin.calificaciones') }}" class="sidebar-link {% if admin_active == 'calificaciones' %}active{% endif %}">
+      <span class="sidebar-icon">C</span>
+      <span class="sidebar-label">Calificaciones</span>
+    </a>
+    <a href="{{ url_for('admin.resultados_estudiantes') }}" class="sidebar-link {% if admin_active == 'resultados' %}active{% endif %}">
+      <span class="sidebar-icon">R</span>
+      <span class="sidebar-label">Resultados</span>
+    </a>
+    <a href="{{ url_for('admin.usuarios') }}" class="sidebar-link {% if admin_active == 'usuarios' %}active{% endif %}">
+      <span class="sidebar-icon">U</span>
+      <span class="sidebar-label">Control usuarios</span>
+    </a>
+    <div class="sidebar-spacer"></div>
+    <a href="{{ url_for('dashboard.index') }}" class="sidebar-link">
+      <span class="sidebar-icon">&#8592;</span>
+      <span class="sidebar-label">Volver</span>
+    </a>
+  </aside>
+
+  <main class="main-content admin-main">
+    <div class="admin-toolbar">
+      <button type="button" id="admin-sidebar-toggle" class="admin-toggle-btn">&#9776; Menu</button>
+    </div>
+    {% block admin_content %}{% endblock %}
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    const layout = document.getElementById('admin-layout');
+    const toggle = document.getElementById('admin-sidebar-toggle');
+    if (!layout || !toggle) return;
+
+    const storageKey = 'edtech-admin-sidebar-collapsed';
+    const saved = localStorage.getItem(storageKey);
+    if (saved === '1') {
+      layout.classList.add('sidebar-collapsed');
+    }
+
+    toggle.addEventListener('click', function () {
+      layout.classList.toggle('sidebar-collapsed');
+      localStorage.setItem(storageKey, layout.classList.contains('sidebar-collapsed') ? '1' : '0');
+    });
+  })();
+</script>
+{% block admin_extra_scripts %}{% endblock %}
+{% endblock %}

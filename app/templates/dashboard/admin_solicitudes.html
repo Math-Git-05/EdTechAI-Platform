@@ -1,0 +1,346 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Solicitudes - Admin EdTech{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page wide">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Centro de Solicitudes</h1>
+      <p>Gestiona solicitudes de cuenta, edición de perfil y edición de comentarios desde un solo lugar.</p>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">{{ solicitudes_cuenta_verificacion_count }}</div>
+      <div class="stat-label">Por verificar correo</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ solicitudes_cuenta_aprobacion_count }}</div>
+      <div class="stat-label">Por aprobar acceso</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ solicitudes_perfil|length }}</div>
+      <div class="stat-label">Solicitudes de perfil</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ solicitudes_comentario|length }}</div>
+      <div class="stat-label">Solicitudes de comentarios</div>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Solicitudes de Creación y Acceso de Cuenta</h2>
+
+    <h3 style="margin:0 0 10px 0;">1) Cuentas pendientes de verificación de correo</h3>
+    {% if solicitudes_cuenta_verificacion %}
+      <div class="users-table" style="margin-bottom: 18px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Correo</th>
+              <th>Registro</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in solicitudes_cuenta_verificacion %}
+              <tr>
+                <td>{{ user.nombre }} {{ user.apellido }}</td>
+                <td>{{ user.role }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.fecha_creacion.strftime('%Y-%m-%d %H:%M') if user.fecha_creacion else '-' }}</td>
+                <td>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <form method="POST" action="{{ url_for('admin.actualizar_verificacion', user_id=user.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="email_verificado" value="1">
+                      <button type="submit" class="btn-small">Marcar verificado</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin.actualizar_estado', user_id=user.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="activo" value="0">
+                      <button type="submit" class="btn-small">Mantener pendiente</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted text-small" style="margin-bottom:14px;">No hay cuentas pendientes de verificación de correo.</p>
+    {% endif %}
+
+    <h3 style="margin:0 0 10px 0;">2) Cuentas verificadas pendientes de aprobación de acceso</h3>
+    {% if solicitudes_cuenta_aprobacion %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Rol</th>
+              <th>Correo</th>
+              <th>Correo verificado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in solicitudes_cuenta_aprobacion %}
+              <tr>
+                <td>{{ user.nombre }} {{ user.apellido }}</td>
+                <td>{{ user.role }}</td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.email_verificado_at.strftime('%Y-%m-%d %H:%M') if user.email_verificado_at else '-' }}</td>
+                <td>
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <form method="POST" action="{{ url_for('admin.actualizar_estado', user_id=user.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="activo" value="1">
+                      <button type="submit" class="btn-small">Aprobar acceso</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin.actualizar_estado', user_id=user.id) }}">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="activo" value="0">
+                      <button type="submit" class="btn-small">Denegar</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted text-small">No hay cuentas pendientes de aprobación de acceso.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Solicitudes de Edición de Perfil</h2>
+    {% if solicitudes_perfil %}
+      <form method="POST" action="{{ url_for('admin.revisar_solicitudes_masiva') }}" class="bulk-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="bulk-controls">
+          <div>
+            <label for="accion_solicitudes">Acción masiva</label>
+            <select id="accion_solicitudes" name="accion_solicitudes" class="table-select">
+              <option value="aprobar">Aprobar seleccionadas</option>
+              <option value="rechazar">Rechazar seleccionadas</option>
+            </select>
+          </div>
+          <div>
+            <label for="admin_note_masivo">Nota (opcional)</label>
+            <input id="admin_note_masivo" name="admin_note_masivo" class="table-select" placeholder="Nota general para la accion masiva">
+          </div>
+          <div class="bulk-submit-wrap">
+            <button type="submit" class="btn btn-primary btn-sm">Aplicar en lote</button>
+          </div>
+        </div>
+
+        <div class="users-table">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="solicitudes-select-all"></th>
+                <th>ID</th>
+                <th>Usuario</th>
+                <th>Tipo</th>
+                <th>Datos actuales</th>
+                <th>Datos solicitados</th>
+                <th>Solicitada</th>
+                <th>Nota admin</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for solicitud in solicitudes_perfil %}
+                {% set payload = solicitud.parsed_payload if solicitud.parsed_payload is defined else {} %}
+                {% set student_payload = payload.get('student_profile', {}) if payload else {} %}
+                {% set teacher_payload = payload.get('teacher_profile', {}) if payload else {} %}
+                {% set role_payload = (payload.get('role') or (solicitud.requester.role if solicitud.requester else '')) %}
+                <tr>
+                  <td>
+                    <input type="checkbox" name="solicitud_ids" value="{{ solicitud.id }}" class="solicitud-check">
+                  </td>
+                  <td>#{{ solicitud.id }}</td>
+                  <td>
+                    {% if solicitud.requester %}
+                      {{ solicitud.requester.nombre }} {{ solicitud.requester.apellido }}<br>
+                      <span class="text-muted text-small">{{ solicitud.requester.email }}</span>
+                    {% else %}
+                      Usuario eliminado
+                    {% endif %}
+                  </td>
+                  <td>{{ role_payload or '-' }}</td>
+                  <td>
+                    {% if solicitud.requester and solicitud.requester.student_profile %}
+                      <div class="text-small">RNE: {{ solicitud.requester.student_profile.student_id or '-' }}</div>
+                      <div class="text-small">Grado: {{ solicitud.requester.student_profile.grado_nivel or '-' }}</div>
+                        <div class="text-small">Género: {{ solicitud.requester.student_profile.genero or '-' }}</div>
+                    {% elif solicitud.requester and solicitud.requester.teacher_profile %}
+                      <div class="text-small">Empleado: {{ solicitud.requester.teacher_profile.employee_id or '-' }}</div>
+                      <div class="text-small">Depto: {{ solicitud.requester.teacher_profile.departamento or '-' }}</div>
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td>
+                    <details>
+                      <summary>Ver detalle</summary>
+                      {% if role_payload == 'estudiante' %}
+                        <div class="text-small mt-1">Nombre: {{ payload.get('nombre', '-') }} {{ payload.get('apellido', '') }}</div>
+                        <div class="text-small">RNE: {{ student_payload.get('student_id', '-') }}</div>
+                        <div class="text-small">2do apellido: {{ student_payload.get('segundo_apellido', '-') }}</div>
+                        <div class="text-small">Género: {{ student_payload.get('genero', '-') }}</div>
+                        <div class="text-small">Nacimiento: {{ student_payload.get('fecha_nacimiento', '-') }}</div>
+                        <div class="text-small">Grado/Nivel: {{ student_payload.get('grado_nivel', '-') }}</div>
+                        <div class="text-small">Centro: {{ student_payload.get('school_id', '-') }}</div>
+                        <div class="text-small">Año ingreso: {{ student_payload.get('enrollment_year', '-') }}</div>
+                        <div class="text-small">Estado académico: {{ student_payload.get('academic_status', '-') }}</div>
+                      {% elif role_payload == 'profesor' %}
+                        <div class="text-small mt-1">Nombre: {{ payload.get('nombre', '-') }} {{ payload.get('apellido', '') }}</div>
+                        <div class="text-small">Empleado: {{ teacher_payload.get('employee_id', '-') }}</div>
+                        <div class="text-small">Especialidad: {{ teacher_payload.get('especialidad', '-') }}</div>
+                        <div class="text-small">Departamento: {{ teacher_payload.get('departamento', '-') }}</div>
+                        <div class="text-small">Teléfono: {{ teacher_payload.get('telefono', '-') }}</div>
+                        <div class="text-small">Centro: {{ teacher_payload.get('school_id', '-') }}</div>
+                        <div class="text-small">Estado laboral: {{ teacher_payload.get('labor_status', '-') }}</div>
+                      {% else %}
+                        <div class="text-small mt-1">Sin detalle estructurado.</div>
+                      {% endif %}
+                    </details>
+                  </td>
+                  <td>{{ solicitud.requested_at.strftime('%Y-%m-%d %H:%M') if solicitud.requested_at else '-' }}</td>
+                  <td style="min-width: 220px;">
+                    <input
+                      type="text"
+                      name="admin_note_{{ solicitud.id }}"
+                      class="table-select"
+                      placeholder="Motivo o comentario"
+                    >
+                  </td>
+                  <td>
+                    <div style="display:flex; gap:8px;">
+                      <button
+                        type="submit"
+                        class="btn-small"
+                        formaction="{{ url_for('admin.aprobar_solicitud_perfil', solicitud_id=solicitud.id) }}"
+                        formmethod="post"
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        type="submit"
+                        class="btn-small"
+                        formaction="{{ url_for('admin.rechazar_solicitud_perfil', solicitud_id=solicitud.id) }}"
+                        formmethod="post"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </form>
+    {% else %}
+      <p class="empty-state">No hay solicitudes pendientes de edición de perfil.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Solicitudes de Edición de Comentarios (Profesores)</h2>
+    {% if solicitudes_comentario %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Profesor</th>
+              <th>Estudiante</th>
+                <th>Motivo profesor</th>
+              <th>Solicitada</th>
+                <th>Nota admin y acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for solicitud in solicitudes_comentario %}
+              <tr>
+                <td>#{{ solicitud.id }}</td>
+                <td>
+                  {% if solicitud.profesor %}
+                    {{ solicitud.profesor.nombre }} {{ solicitud.profesor.apellido }}
+                  {% else %}
+                    Profesor no disponible
+                  {% endif %}
+                </td>
+                <td>
+                  {% if solicitud.estudiante %}
+                    {{ solicitud.estudiante.nombre }} {{ solicitud.estudiante.apellido }}
+                    {% if solicitud.estudiante.student_profile %}
+                      <br><span class="text-muted text-small">{{ solicitud.estudiante.student_profile.student_id }}</span>
+                    {% endif %}
+                  {% else %}
+                    Estudiante no disponible
+                  {% endif %}
+                </td>
+                <td>{{ solicitud.teacher_note or '-' }}</td>
+                <td>{{ solicitud.requested_at.strftime('%Y-%m-%d %H:%M') if solicitud.requested_at else '-' }}</td>
+                <td style="min-width: 220px;">
+                  <form method="POST" style="display:flex; gap:8px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input
+                      type="text"
+                      name="admin_note_comment_{{ solicitud.id }}"
+                      class="table-select"
+                      placeholder="Nota admin"
+                    >
+                    <button
+                      type="submit"
+                      class="btn-small"
+                      formaction="{{ url_for('admin.aprobar_solicitud_comentario', solicitud_id=solicitud.id) }}"
+                      formmethod="post"
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn-small"
+                      formaction="{{ url_for('admin.rechazar_solicitud_comentario', solicitud_id=solicitud.id) }}"
+                      formmethod="post"
+                    >
+                      Rechazar
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay solicitudes pendientes de edición de comentarios.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  const selectAllSolicitudes = document.getElementById('solicitudes-select-all');
+  if (selectAllSolicitudes) {
+    selectAllSolicitudes.addEventListener('change', function () {
+      const checked = !!selectAllSolicitudes.checked;
+      document.querySelectorAll('.solicitud-check').forEach(function (checkbox) {
+        checkbox.checked = checked;
+      });
+    });
+  }
+</script>
+{% endblock %}

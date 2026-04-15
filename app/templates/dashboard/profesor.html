@@ -1,0 +1,230 @@
+{% extends "layout/base.html" %}
+{% block title %}Dashboard Profesor - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<style>
+  .panel-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  .panel-tab {
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    color: var(--text1);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .panel-tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+
+  .panel-content {
+    display: none;
+  }
+
+  .panel-content.active {
+    display: block;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Panel de Profesor</h1>
+      <p>Visualiza y evalúa a tus estudiantes asignados por el administrador.</p>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-number">{{ estudiantes|length }}</div>
+      <div class="stat-label">Estudiantes asignados</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ evaluaciones_total }}</div>
+      <div class="stat-label">Evaluaciones registradas</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number">
+        {% if score_averages.average_score is not none %}
+          {{ '%.1f'|format(score_averages.average_score) }}
+        {% else %}
+          -
+        {% endif %}
+      </div>
+      <div class="stat-label">Promedio general (mis estudiantes)</div>
+    </div>
+  </div>
+
+  <div class="panel-tabs" role="tablist" aria-label="Panel del profesor">
+    <button type="button" class="panel-tab active" data-target="panel-aptitudes">Promedios de Aptitudes</button>
+    <button type="button" class="panel-tab" data-target="panel-estudiantes">Estudiantes</button>
+  </div>
+
+  <div id="panel-aptitudes" class="admin-section panel-content active">
+    <h2>Promedios de Aptitudes</h2>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</div>
+        <div class="stat-label">Razonamiento lógico</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</div>
+        <div class="stat-label">Resolución de problemas</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</div>
+        <div class="stat-label">Atención al detalle</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.creativity_score) if score_averages.creativity_score is not none else '-' }}</div>
+        <div class="stat-label">Creatividad</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</div>
+        <div class="stat-label">Habilidad técnica</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-estudiantes" class="estudiantes-section panel-content">
+    <h2>Mis Estudiantes</h2>
+    {% if estudiantes %}
+      <div class="bulk-controls" style="margin-bottom: 12px;">
+        <div class="table-search" style="max-width: none; margin-bottom: 0;">
+          <span class="table-search-icon" aria-hidden="true">&#128269;</span>
+          <input
+            type="search"
+            id="search-estudiantes-profesor"
+            class="table-search-input"
+            placeholder="Buscar por nombre, correo, sección o RNE..."
+          >
+        </div>
+        <div>
+          <label for="filter-seccion-profesor">Sección</label>
+          <select id="filter-seccion-profesor" class="table-select">
+            <option value="">Todas</option>
+            <option value="sin-seccion">Sin sección</option>
+            {% for seccion in secciones_disponibles %}
+              <option value="{{ seccion | lower }}">{{ seccion }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <p id="search-estudiantes-profesor-result" class="table-search-result"></p>
+      <div class="estudiantes-table">
+        <table id="tabla-estudiantes-profesor">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Seccion</th>
+              <th>Cuenta</th>
+              <th>Comentario</th>
+              <th>Historial</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for est in estudiantes %}
+              {% set seccion_tag = (est.seccion or 'sin-seccion') | lower %}
+              <tr
+                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ est.email ~ ' ' ~ (est.seccion or '') ~ ' ' ~ (est.student_profile.student_id if est.student_profile else '')) | lower }}"
+                data-seccion="{{ seccion_tag }}"
+              >
+                <td>{{ est.nombre }} {{ est.apellido }}</td>
+                <td>{{ est.email }}</td>
+                <td>{{ est.seccion or '-' }}</td>
+                <td>
+                  {% if est.activo %}
+                    <span class="badge-primary">Activa</span>
+                  {% else %}
+                    <span class="badge-secondary">Inactiva</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if comentarios_por_estudiante.get(est.id) %}
+                    <span class="badge-primary">Comentado</span>
+                  {% else %}
+                    <span class="badge-secondary">Pendiente</span>
+                  {% endif %}
+                </td>
+                <td>{{ evaluaciones_por_estudiante.get(est.id, 0) }} eval.</td>
+                <td>
+                  <a href="{{ url_for('profesor.comentarios_estudiante', estudiante_id=est.id) }}" class="btn-small">
+                    Comentarios
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">Aún no tienes estudiantes asignados. Solicita al administrador realizar la asignación.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function () {
+    const tabs = Array.from(document.querySelectorAll('.panel-tab'));
+    const panels = Array.from(document.querySelectorAll('.panel-content'));
+    if (tabs.length && panels.length) {
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', function () {
+          const target = tab.getAttribute('data-target');
+          tabs.forEach((item) => item.classList.remove('active'));
+          panels.forEach((panel) => panel.classList.remove('active'));
+          tab.classList.add('active');
+          const activePanel = document.getElementById(target);
+          if (activePanel) activePanel.classList.add('active');
+        });
+      });
+    }
+
+    const input = document.getElementById('search-estudiantes-profesor');
+    const seccion = document.getElementById('filter-seccion-profesor');
+    const table = document.getElementById('tabla-estudiantes-profesor');
+    const result = document.getElementById('search-estudiantes-profesor-result');
+    if (!input || !table) return;
+
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const runFilter = () => {
+      const query = (input.value || '').trim().toLowerCase();
+      const seccionValue = ((seccion && seccion.value) || '').trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const text = (row.dataset.search || '').toLowerCase();
+        const rowSeccion = (row.dataset.seccion || '').toLowerCase();
+        const matchQuery = !query || text.includes(query);
+        const matchSeccion = !seccionValue || rowSeccion === seccionValue;
+        const match = matchQuery && matchSeccion;
+        row.style.display = match ? '' : 'none';
+        if (match) visible += 1;
+      });
+      if (result) {
+        result.textContent = `${visible} de ${rows.length} estudiante(s)`;
+      }
+    };
+
+    input.addEventListener('input', runFilter);
+    if (seccion) seccion.addEventListener('change', runFilter);
+    runFilter();
+  })();
+</script>
+{% endblock %}

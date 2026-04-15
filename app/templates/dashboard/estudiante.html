@@ -1,0 +1,150 @@
+{% extends "layout/base.html" %}
+{% block title %}Dashboard Estudiante - EdTech{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Hola, {{ user.nombre }}!</h1>
+      <p>Bienvenido a tu panel de estudiante</p>
+      <p class="welcome-subtitle">Realiza tu evaluación de aptitudes para recibir orientación técnica personalizada</p>
+      {% if pending_profile_request %}
+        <p class="welcome-subtitle">
+          Tienes una solicitud de perfil pendiente desde {{ pending_profile_request.requested_at.strftime('%Y-%m-%d') if pending_profile_request.requested_at else 'hoy' }}.
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="dashboard-card">
+      <div class="card-header enf">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M8 4h16v24H8z" stroke="#059669" stroke-width="2" fill="none"/>
+          <path d="M12 8h8M12 13h8M12 18h8M12 23h8" stroke="#059669" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3>Evaluación de Aptitudes</h3>
+      {% if evaluacion_completada %}
+        <p>Tu evaluación ya fue enviada. El formulario queda bloqueado para evitar duplicados.</p>
+        <a href="{{ url_for('resultado.index') }}" class="btn btn-secondary btn-sm">Ver mi resultado</a>
+      {% else %}
+        <p>Responde 50 preguntas para identificar tu técnico ideal.</p>
+        <a href="{{ url_for('formulario.index') }}" class="btn btn-primary btn-sm">Comenzar evaluación</a>
+      {% endif %}
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header inf">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M4 24h24M8 20v4m4-8v8m4-12v12m4-8v8m4-4v4" stroke="#2563eb" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3>Orientación Técnica</h3>
+      {% if evaluacion_completada and recommendation_summary %}
+        <p>
+          Ruta sugerida: <strong>{{ recommendation_summary.track_name }}</strong>
+          {% if recommendation_summary.affinity_level %}({{ recommendation_summary.affinity_level }}){% endif %}.
+        </p>
+        {% if recommendation_summary.guidance %}
+          <p class="text-small">{{ recommendation_summary.guidance }}</p>
+        {% endif %}
+      {% else %}
+        <p>Visualiza tus resultados y recomendaciones personalizadas.</p>
+      {% endif %}
+      {% if evaluacion_completada %}
+        <a href="{{ url_for('resultado.index') }}" class="btn btn-secondary btn-sm">Ver recomendación</a>
+      {% else %}
+        <a href="{{ url_for('formulario.index') }}" class="btn btn-secondary btn-sm">Completar evaluación</a>
+      {% endif %}
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header inf">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <path d="M5 24h22M8 20l4-4 4 3 8-8" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3>Puntajes por Sección</h3>
+      {% if evaluacion and evaluacion.average_score is not none %}
+        <p>Promedio general de secciones: <strong>{{ '%.1f'|format(evaluacion.average_score) }}</strong></p>
+      {% elif evaluacion_completada %}
+        <p>Tu envío fue registrado, pero aún no hay puntajes sincronizados.</p>
+      {% else %}
+        <p>Al completar tu evaluación verás aquí el promedio de tus secciones.</p>
+      {% endif %}
+      {% if evaluacion_completada %}
+        <a href="{{ url_for('resultado.index') }}" class="btn btn-secondary btn-sm">Ver desglose</a>
+      {% endif %}
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header adm">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="10" r="4" stroke="#7c3aed" stroke-width="2"/>
+          <path d="M3 24c0-5 6-8 13-8s13 3 13 8" stroke="#7c3aed" stroke-width="2" fill="none"/>
+        </svg>
+      </div>
+      <h3>Técnicos Disponibles</h3>
+      <p>Conoce los 4 técnicos para los que puedes orientarte</p>
+      <a href="#" class="btn btn-secondary btn-sm">Explorar técnicos</a>
+    </div>
+
+    <div class="dashboard-card">
+      <div class="card-header com">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <circle cx="16" cy="10" r="4" stroke="#d97706" stroke-width="2"/>
+          <path d="M4 26c0-4.8 5.4-8 12-8s12 3.2 12 8" stroke="#d97706" stroke-width="2" fill="none"/>
+        </svg>
+      </div>
+      <h3>Mi Perfil</h3>
+      <p>Actualiza tus datos personales y académicos mediante solicitud.</p>
+      <a href="{{ url_for('estudiante.perfil') }}" class="btn btn-secondary btn-sm">Editar perfil</a>
+    </div>
+  </div>
+
+  {% if evaluacion_completada and score_cards %}
+    <div class="admin-section">
+      <h2>Tus Secciones de Aptitud</h2>
+      <div class="stats-grid">
+        {% for card in score_cards %}
+          <div class="stat-card">
+            <div class="stat-number">{{ card.value_text }}</div>
+            <div class="stat-label">{{ card.label }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="tecnicos-overview">
+    <h2>Técnicos Disponibles</h2>
+    <div class="tecnicos-grid">
+      <div class="tecnico-item">
+        <div class="tecnico-badge inf">1</div>
+        <h4>Informática</h4>
+        <p>Desarrollo de software, análisis de sistemas y programación.</p>
+      </div>
+      <div class="tecnico-item">
+        <div class="tecnico-badge enf">2</div>
+        <h4>Enfermeria</h4>
+        <p>Atención de salud, cuidado del paciente y bienestar.</p>
+      </div>
+      <div class="tecnico-item">
+        <div class="tecnico-badge adm">3</div>
+        <h4>Administración</h4>
+        <p>Gestión empresarial, organización y recursos humanos.</p>
+      </div>
+      <div class="tecnico-item">
+        <div class="tecnico-badge com">4</div>
+        <h4>Comercio</h4>
+        <p>Ventas, marketing, negociación y servicio al cliente.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
