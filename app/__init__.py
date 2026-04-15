@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, flash, redirect, request, session, url_for
 from flask_login import LoginManager, current_user
 from flask_sqlalchemy import SQLAlchemy
@@ -1431,3 +1433,10 @@ def create_app(env: str = "default"):
     app.register_blueprint(resultado_bp)
 
     return app
+
+
+# Fallback WSGI entrypoint for platforms configured as `gunicorn app:app`.
+_wsgi_env = (os.getenv("FLASK_CONFIG", "production") or "production").strip().lower()
+if _wsgi_env not in config:
+    _wsgi_env = "production"
+app = create_app(_wsgi_env)
