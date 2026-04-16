@@ -19,8 +19,6 @@ class User(db.Model, UserMixin):
     ultimo_login = db.Column(db.DateTime, nullable=True)
     activo = db.Column(db.Boolean, nullable=False, default=True)
     reset_requested_at = db.Column(db.DateTime, nullable=True)
-    last_email_event = db.Column(db.String(80), nullable=True)
-    last_email_sent_at = db.Column(db.DateTime, nullable=True)
     profesor_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     seccion = db.Column(db.String(50), nullable=True)
 

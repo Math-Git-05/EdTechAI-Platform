@@ -228,14 +228,14 @@ def _reserve_email_slot(user: User, event_key: str) -> bool:
     cooldown = int(current_app.config.get("AUTH_EMAIL_DEDUP_SECONDS", 90) or 90)
     cooldown = max(5, cooldown)
 
-    now = datetime.utcnow()
-    last_event = (getattr(user, "last_email_event", "") or "").strip().lower()
-    last_sent_at = getattr(user, "last_email_sent_at", None)
-    if (
-        last_event == event_key
-        and last_sent_at is not None
-        and (now - last_sent_at).total_seconds() < cooldown
-    ):
+    now_ts = int(datetime.utcnow().timestamp())
+    storage = session.get("_auth_email_dedup")
+    if not isinstance(storage, dict):
+        storage = {}
+
+    slot_key = f"{event_key}:{_normalize_email(user.email)}"
+    last_ts = storage.get(slot_key)
+    if isinstance(last_ts, (int, float)) and (now_ts - int(last_ts)) < cooldown:
         current_app.logger.info(
             "Email duplicado suprimido. evento=%s user_id=%s email=%s",
             event_key,
@@ -244,22 +244,30 @@ def _reserve_email_slot(user: User, event_key: str) -> bool:
         )
         return False
 
-    user.last_email_event = event_key
-    user.last_email_sent_at = now
-    db.session.add(user)
-    db.session.commit()
+    # Limpieza ligera para no inflar la sesion.
+    retention = max(300, cooldown * 10)
+    pruned = {
+        key: value
+        for key, value in storage.items()
+        if isinstance(value, (int, float)) and (now_ts - int(value)) <= retention
+    }
+    pruned[slot_key] = now_ts
+    session["_auth_email_dedup"] = pruned
+    session.modified = True
     return True
 
 
 def _release_email_slot(user: User) -> None:
     """Libera reserva si fallo el SMTP para permitir reintento inmediato."""
-    try:
-        user.last_email_event = None
-        user.last_email_sent_at = None
-        db.session.add(user)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+    storage = session.get("_auth_email_dedup")
+    if not isinstance(storage, dict):
+        return
+    email_norm = _normalize_email(user.email)
+    keys_to_remove = [key for key in storage.keys() if key.endswith(f":{email_norm}")]
+    for key in keys_to_remove:
+        storage.pop(key, None)
+    session["_auth_email_dedup"] = storage
+    session.modified = True
 
 
 def _send_guarded_email(*, user: User, event_key: str, payload) -> bool:

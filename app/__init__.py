@@ -53,8 +53,6 @@ def _migrate_legacy_sqlserver_users_table() -> None:
                     ultimo_login DATETIME2 NULL,
                     activo BIT NOT NULL CONSTRAINT DF_users_activo DEFAULT (1),
                     reset_requested_at DATETIME2 NULL,
-                    last_email_event NVARCHAR(80) NULL,
-                    last_email_sent_at DATETIME2 NULL,
                     profesor_id INT NULL,
                     seccion NVARCHAR(50) NULL,
                     CONSTRAINT FK_users_profesor FOREIGN KEY (profesor_id) REFERENCES dbo.users(id)
@@ -111,7 +109,6 @@ def _ensure_user_columns() -> None:
     datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
     int_type = "INT" if dialect_name == "mssql" else "INTEGER"
     text_type = "NVARCHAR(50)" if dialect_name == "mssql" else "VARCHAR(50)"
-    event_type = "NVARCHAR(80)" if dialect_name == "mssql" else "VARCHAR(80)"
     add_column_prefix = "ALTER TABLE users ADD" if dialect_name == "mssql" else "ALTER TABLE users ADD COLUMN"
 
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
@@ -127,10 +124,6 @@ def _ensure_user_columns() -> None:
         statements.append(f"{add_column_prefix} activo {bool_type} NOT NULL DEFAULT 1")
     if "reset_requested_at" not in existing_columns:
         statements.append(f"{add_column_prefix} reset_requested_at {datetime_type}")
-    if "last_email_event" not in existing_columns:
-        statements.append(f"{add_column_prefix} last_email_event {event_type}")
-    if "last_email_sent_at" not in existing_columns:
-        statements.append(f"{add_column_prefix} last_email_sent_at {datetime_type}")
     if "profesor_id" not in existing_columns:
         statements.append(f"{add_column_prefix} profesor_id {int_type}")
     if "seccion" not in existing_columns:
