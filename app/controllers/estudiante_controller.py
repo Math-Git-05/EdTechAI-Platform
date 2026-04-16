@@ -51,8 +51,9 @@ def index():
         .first()
     )
     evaluacion_completada = evaluacion is not None
+    resultados_publicados = bool(evaluacion and getattr(evaluacion, "results_released", False))
     recommendation_summary = None
-    if evaluacion:
+    if evaluacion and resultados_publicados:
         recommendation = build_recommendation_for_student(student=current_user, evaluacion=evaluacion)
         primary = recommendation.get("primary_recommendation")
         if primary:
@@ -72,8 +73,9 @@ def index():
         "dashboard/estudiante.html",
         user=current_user,
         evaluacion_completada=evaluacion_completada,
+        resultados_publicados=resultados_publicados,
         evaluacion=evaluacion,
-        score_cards=(score_cards_from_evaluacion(evaluacion) if evaluacion else []),
+        score_cards=(score_cards_from_evaluacion(evaluacion) if evaluacion and resultados_publicados else []),
         recommendation_summary=recommendation_summary,
         pending_profile_request=pending_request,
     )

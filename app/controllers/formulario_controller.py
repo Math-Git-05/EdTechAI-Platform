@@ -33,6 +33,10 @@ def _evaluacion_tally_completada(estudiante_id: int):
     )
 
 
+def _results_released(evaluacion: Evaluacion | None) -> bool:
+    return bool(evaluacion and getattr(evaluacion, "results_released", False))
+
+
 def _sync_ai_prediction_safe(*, student, evaluacion) -> str | None:
     try:
         recommendation = build_recommendation_for_student(student=student, evaluacion=evaluacion)
@@ -45,6 +49,11 @@ def _sync_ai_prediction_safe(*, student, evaluacion) -> str | None:
         return None
     except Exception:
         db.session.rollback()
+        current_app.logger.exception(
+            "No se pudo sincronizar ai_predictions para evaluacion_id=%s estudiante_id=%s",
+            getattr(evaluacion, "id", None),
+            getattr(student, "id", None),
+        )
         return "No se pudo sincronizar ai_predictions para esta evaluacion."
 
 
@@ -90,6 +99,7 @@ def index():
         "formulario.html",
         evaluacion_bloqueada=bool(evaluacion_existente),
         evaluacion_existente=evaluacion_existente,
+        resultados_publicados=_results_released(evaluacion_existente),
         tally_form_id=current_app.config.get("TALLY_FORM_ID", "kdAYAM"),
     )
 
@@ -103,6 +113,9 @@ def resultado(resultado_id):
     if not evaluacion_existente:
         flash("Debes completar la evaluacion antes de ver resultados.", "warning")
         return redirect(url_for("formulario.index"))
+    if not _results_released(evaluacion_existente):
+        flash("Tus resultados aun estan en revision administrativa.", "info")
+        return redirect(url_for("estudiante.index"))
     recommendation = build_recommendation_for_student(student=current_user, evaluacion=evaluacion_existente)
     primary = recommendation.get("primary_recommendation")
     if primary:
@@ -198,6 +211,10 @@ def marcar_completada():
             "ok": True,
             "already_completed": True,
             "evaluacion_id": evaluacion_existente.id,
+            "results_released": _results_released(evaluacion_existente),
+            "next_url": url_for("resultado.index")
+            if _results_released(evaluacion_existente)
+            else url_for("estudiante.index"),
         }
         prediction_warning = _sync_ai_prediction_safe(student=current_user, evaluacion=evaluacion_existente)
         if tally_fetch_error:
@@ -218,6 +235,10 @@ def marcar_completada():
                         "ok": True,
                         "already_completed": True,
                         "evaluacion_id": duplicate_submission.id,
+                        "results_released": _results_released(duplicate_submission),
+                        "next_url": url_for("resultado.index")
+                        if _results_released(duplicate_submission)
+                        else url_for("estudiante.index"),
                     }
                 )
             return jsonify(
@@ -291,9 +312,17 @@ def marcar_completada():
     )
     db.session.commit()
 
-    response_payload = {"ok": True, "evaluacion_id": evaluacion.id}
+    response_payload = {
+        "ok": True,
+        "evaluacion_id": evaluacion.id,
+        "results_released": _results_released(evaluacion),
+        "next_url": url_for("resultado.index")
+        if _results_released(evaluacion)
+        else url_for("estudiante.index"),
+    }
     prediction_warning = _sync_ai_prediction_safe(student=current_user, evaluacion=evaluacion)
-    _send_result_email_safe(student=current_user, evaluacion=evaluacion)
+    if _results_released(evaluacion):
+        _send_result_email_safe(student=current_user, evaluacion=evaluacion)
     if tally_fetch_error:
         response_payload["tally_sync_warning"] = tally_fetch_error
     if prediction_warning:

@@ -95,8 +95,7 @@ def upsert_ai_prediction_for_evaluacion(
         payload["prob_comercio"] = probs.get("com", 0.0)
     if "model_version" in columns:
         payload["model_version"] = model_version
-    if "predicted_at" in columns:
-        payload["predicted_at"] = db.func.current_timestamp()
+    include_predicted_at = "predicted_at" in columns
 
     if not payload:
         return
@@ -120,9 +119,12 @@ def upsert_ai_prediction_for_evaluacion(
 
     if int(exists) > 0 and where_clause:
         set_cols = [column for column in payload.keys() if column not in {"student_id", "response_id"}]
-        if not set_cols:
+        set_sql_parts = [f"{column} = :{column}" for column in set_cols]
+        if include_predicted_at:
+            set_sql_parts.append("predicted_at = CURRENT_TIMESTAMP")
+        if not set_sql_parts:
             return
-        update_sql = ", ".join(f"{column} = :{column}" for column in set_cols)
+        update_sql = ", ".join(set_sql_parts)
         params = {column: payload[column] for column in set_cols}
         params.update(where_params)
         db.session.execute(
@@ -132,12 +134,16 @@ def upsert_ai_prediction_for_evaluacion(
         return
 
     insert_cols = [column for column in payload.keys() if payload.get(column) is not None]
+    insert_vals = [f":{column}" for column in insert_cols]
+    if include_predicted_at:
+        insert_cols.append("predicted_at")
+        insert_vals.append("CURRENT_TIMESTAMP")
     if not insert_cols:
         return
 
     insert_sql_cols = ", ".join(insert_cols)
-    insert_sql_vals = ", ".join(f":{column}" for column in insert_cols)
-    insert_params = {column: payload[column] for column in insert_cols}
+    insert_sql_vals = ", ".join(insert_vals)
+    insert_params = {column: payload[column] for column in payload.keys() if column in insert_cols}
     db.session.execute(
         text(f"INSERT INTO ai_predictions ({insert_sql_cols}) VALUES ({insert_sql_vals})"),
         insert_params,

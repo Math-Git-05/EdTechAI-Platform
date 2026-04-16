@@ -8,6 +8,7 @@ class Evaluacion(db.Model):
     estudiante_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     estado = db.Column(db.String(30), nullable=False, default="completada")
     origen = db.Column(db.String(40), nullable=False, default="tally")
+    results_released = db.Column(db.Boolean, nullable=False, default=False)
     referencia_externa = db.Column(db.String(120), nullable=True)
     form_id = db.Column(db.String(40), nullable=True)
     respondent_id = db.Column(db.String(120), nullable=True)

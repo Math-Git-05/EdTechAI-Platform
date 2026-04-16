@@ -68,9 +68,10 @@ class Config:
     MAIL_FROM_SUPPORT = _env_first("MAIL_FROM_SUPPORT", "SMTP_FROM_SUPPORT")
     MAIL_REPLY_TO_SUPPORT = _env_first("MAIL_REPLY_TO_SUPPORT")
     MAIL_BRAND_NAME = _env_first("MAIL_BRAND_NAME", default="EdTech AI")
+    AUTH_EMAIL_DEDUP_SECONDS = int(_env_first("AUTH_EMAIL_DEDUP_SECONDS", default="90"))
 
     # URL base para links de verificacion y recuperacion
-    APP_BASE_URL = os.getenv("APP_BASE_URL", "http://192.168.100.119:5000/")
+    APP_BASE_URL = _env_first("APP_BASE_URL", "PUBLIC_BASE_URL", default="https://edtechai.lat")
     TALLY_SUBMISSIONS_SHEET_URL = os.getenv(
         "TALLY_SUBMISSIONS_SHEET_URL",
         "https://docs.google.com/spreadsheets/d/1BH2w7FbiSbkGV2VjkIydHgYyG9uF5HOlng28Mzm7JHw/edit?usp=sharing",

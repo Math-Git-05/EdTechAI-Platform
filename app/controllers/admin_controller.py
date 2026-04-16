@@ -280,6 +280,11 @@ def _sync_ai_prediction_safe(evaluacion: Evaluacion) -> bool:
         return True
     except Exception:
         db.session.rollback()
+        current_app.logger.exception(
+            "No se pudo sincronizar ai_predictions para evaluacion_id=%s estudiante_id=%s",
+            getattr(evaluacion, "id", None),
+            getattr(estudiante, "id", None),
+        )
         return False
 
 
@@ -689,6 +694,7 @@ def resultados_estudiantes():
             {
                 "estudiante": estudiante,
                 "evaluacion": evaluacion,
+                "results_released": bool(evaluacion and evaluacion.results_released),
                 "tecnico": tecnico,
                 "promedio": promedio,
                 "fecha_resultado": fecha_resultado,
@@ -706,6 +712,36 @@ def resultados_estudiantes():
         estudiantes_sin_resultado=max(0, len(estudiantes) - total_con_resultado),
         **_dashboard_context(),
     )
+
+
+@admin_bp.route("/resultados-estudiantes/<int:evaluacion_id>/toggle-release", methods=["POST"])
+@login_required
+def toggle_resultado_release(evaluacion_id: int):
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+
+    evaluacion = Evaluacion.query.filter_by(id=evaluacion_id, origen="tally").first()
+    if not evaluacion:
+        flash("No se encontro la evaluacion seleccionada.", "warning")
+        return redirect(url_for("admin.resultados_estudiantes"))
+
+    release_raw = (request.form.get("release") or "").strip().lower()
+    if release_raw in {"1", "true", "on", "si", "yes"}:
+        should_release = True
+    elif release_raw in {"0", "false", "off", "no"}:
+        should_release = False
+    else:
+        should_release = not bool(evaluacion.results_released)
+
+    evaluacion.results_released = should_release
+    db.session.add(evaluacion)
+    db.session.commit()
+
+    if should_release:
+        flash("Resultado publicado para el estudiante.", "success")
+    else:
+        flash("Resultado ocultado. El estudiante ya no puede verlo.", "info")
+    return redirect(url_for("admin.resultados_estudiantes"))
 
 
 @admin_bp.route("/asignaciones")

@@ -69,6 +69,13 @@
   .result-modal-list li {
     margin-bottom: 6px;
   }
+
+  .table-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
 </style>
 {% endblock %}
 
@@ -128,6 +135,14 @@
           <option value="sin-resultado">Sin resultado</option>
         </select>
       </div>
+      <div>
+        <label for="filter-publicacion-resultados">Publicacion</label>
+        <select id="filter-publicacion-resultados" class="table-select">
+          <option value="">Todas</option>
+          <option value="publicado">Publicado</option>
+          <option value="en-espera">En espera</option>
+        </select>
+      </div>
     </div>
     <p id="search-resultados-admin-result" class="table-search-result"></p>
 
@@ -143,6 +158,7 @@
               <th>Promedio</th>
               <th>Tecnico sugerido</th>
               <th>Fecha resultado</th>
+              <th>Publicacion</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -153,10 +169,12 @@
               {% set profile = est.student_profile %}
               {% set seccion_tag = (est.seccion or 'sin-seccion') | lower %}
               {% set estado_tag = 'con-resultado' if eval else 'sin-resultado' %}
+              {% set release_tag = 'publicado' if row.results_released else ('en-espera' if eval else 'sin-evaluacion') %}
               <tr
                 data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ est.email ~ ' ' ~ (profile.student_id if profile else '') ~ ' ' ~ (est.seccion or '') ~ ' ' ~ row.tecnico) | lower }}"
                 data-seccion="{{ seccion_tag }}"
                 data-estado="{{ estado_tag }}"
+                data-release="{{ release_tag }}"
               >
                 <td>{{ est.nombre }} {{ est.apellido }}</td>
                 <td>{{ profile.student_id if profile else '-' }}</td>
@@ -179,21 +197,45 @@
                 <td>{{ row.fecha_resultado.strftime('%Y-%m-%d %H:%M') if row.fecha_resultado else '-' }}</td>
                 <td>
                   {% if eval %}
-                    <button
-                      type="button"
-                      class="btn-small js-open-result-modal"
-                      data-student="{{ (est.nombre ~ ' ' ~ est.apellido) | e }}"
-                      data-rne="{{ (profile.student_id if profile else '-') | e }}"
-                      data-email="{{ est.email | e }}"
-                      data-section="{{ (est.seccion or '-') | e }}"
-                      data-track="{{ row.tecnico | e }}"
-                      data-average="{{ ('%.2f'|format(row.promedio)) if row.promedio is not none else '-' }}"
-                      data-date="{{ row.fecha_resultado.strftime('%Y-%m-%d %H:%M') if row.fecha_resultado else '-' }}"
-                      data-guidance="{{ (row.guidance or '') | e }}"
-                      data-scores='{{ row.score_cards | tojson }}'
-                    >
-                      Ver resultado
-                    </button>
+                    {% if row.results_released %}
+                      <span class="badge-primary">Publicado</span>
+                    {% else %}
+                      <span class="badge-secondary">En espera</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge-secondary">Sin evaluacion</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if eval %}
+                    <div class="table-actions">
+                      <button
+                        type="button"
+                        class="btn-small js-open-result-modal"
+                        data-student="{{ (est.nombre ~ ' ' ~ est.apellido) | e }}"
+                        data-rne="{{ (profile.student_id if profile else '-') | e }}"
+                        data-email="{{ est.email | e }}"
+                        data-section="{{ (est.seccion or '-') | e }}"
+                        data-track="{{ row.tecnico | e }}"
+                        data-average="{{ ('%.2f'|format(row.promedio)) if row.promedio is not none else '-' }}"
+                        data-date="{{ row.fecha_resultado.strftime('%Y-%m-%d %H:%M') if row.fecha_resultado else '-' }}"
+                        data-guidance="{{ (row.guidance or '') | e }}"
+                        data-scores='{{ row.score_cards | tojson }}'
+                      >
+                        Ver resultado
+                      </button>
+                      <form method="post" action="{{ url_for('admin.toggle_resultado_release', evaluacion_id=eval.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="release" value="{{ 0 if row.results_released else 1 }}">
+                        <button
+                          type="submit"
+                          class="btn-small"
+                          style="background: {{ '#7f1d1d' if row.results_released else '#166534' }};"
+                        >
+                          {{ 'Ocultar' if row.results_released else 'Publicar' }}
+                        </button>
+                      </form>
+                    </div>
                   {% else %}
                     <span class="badge-secondary">Sin detalle</span>
                   {% endif %}
@@ -248,6 +290,7 @@
     const input = document.getElementById('search-resultados-admin');
     const seccion = document.getElementById('filter-seccion-resultados');
     const estado = document.getElementById('filter-estado-resultados');
+    const publicacion = document.getElementById('filter-publicacion-resultados');
     const table = document.getElementById('tabla-resultados-admin');
     const result = document.getElementById('search-resultados-admin-result');
     if (!input || !table) return;
@@ -257,16 +300,19 @@
       const query = (input.value || '').trim().toLowerCase();
       const seccionValue = ((seccion && seccion.value) || '').trim().toLowerCase();
       const estadoValue = ((estado && estado.value) || '').trim().toLowerCase();
+      const publicacionValue = ((publicacion && publicacion.value) || '').trim().toLowerCase();
       let visible = 0;
 
       rows.forEach((row) => {
         const text = (row.dataset.search || '').toLowerCase();
         const rowSeccion = (row.dataset.seccion || '').toLowerCase();
         const rowEstado = (row.dataset.estado || '').toLowerCase();
+        const rowPublicacion = (row.dataset.release || '').toLowerCase();
         const matchQuery = !query || text.includes(query);
         const matchSeccion = !seccionValue || rowSeccion === seccionValue;
         const matchEstado = !estadoValue || rowEstado === estadoValue;
-        const match = matchQuery && matchSeccion && matchEstado;
+        const matchPublicacion = !publicacionValue || rowPublicacion === publicacionValue;
+        const match = matchQuery && matchSeccion && matchEstado && matchPublicacion;
         row.style.display = match ? '' : 'none';
         if (match) visible += 1;
       });
@@ -279,6 +325,7 @@
     input.addEventListener('input', runFilter);
     if (seccion) seccion.addEventListener('change', runFilter);
     if (estado) estado.addEventListener('change', runFilter);
+    if (publicacion) publicacion.addEventListener('change', runFilter);
     runFilter();
   })();
 

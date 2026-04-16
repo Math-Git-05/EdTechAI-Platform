@@ -223,10 +223,51 @@ def _flash_debug_email_error() -> None:
         flash(f"Detalle SMTP: {smtp_error}", "info")
 
 
-def _send_verification_email(user: User) -> bool:
-    verify_url = _verification_link(user)
-    payload = build_verification_email(user_name=user.nombre, verify_url=verify_url)
-    return send_email(
+def _reserve_email_slot(user: User, event_key: str) -> bool:
+    """Evita envios duplicados del mismo tipo en una ventana corta."""
+    cooldown = int(current_app.config.get("AUTH_EMAIL_DEDUP_SECONDS", 90) or 90)
+    cooldown = max(5, cooldown)
+
+    now = datetime.utcnow()
+    last_event = (getattr(user, "last_email_event", "") or "").strip().lower()
+    last_sent_at = getattr(user, "last_email_sent_at", None)
+    if (
+        last_event == event_key
+        and last_sent_at is not None
+        and (now - last_sent_at).total_seconds() < cooldown
+    ):
+        current_app.logger.info(
+            "Email duplicado suprimido. evento=%s user_id=%s email=%s",
+            event_key,
+            user.id,
+            user.email,
+        )
+        return False
+
+    user.last_email_event = event_key
+    user.last_email_sent_at = now
+    db.session.add(user)
+    db.session.commit()
+    return True
+
+
+def _release_email_slot(user: User) -> None:
+    """Libera reserva si fallo el SMTP para permitir reintento inmediato."""
+    try:
+        user.last_email_event = None
+        user.last_email_sent_at = None
+        db.session.add(user)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
+def _send_guarded_email(*, user: User, event_key: str, payload) -> bool:
+    if not _reserve_email_slot(user, event_key):
+        # Tratamos como exito silencioso para no mostrar errores por duplicado al usuario.
+        return True
+
+    sent = send_email(
         user.email,
         payload.subject,
         payload.html,
@@ -234,55 +275,36 @@ def _send_verification_email(user: User) -> bool:
         sender=payload.sender,
         reply_to=payload.reply_to,
     )
+    if not sent:
+        _release_email_slot(user)
+    return sent
+
+
+def _send_verification_email(user: User) -> bool:
+    verify_url = _verification_link(user)
+    payload = build_verification_email(user_name=user.nombre, verify_url=verify_url)
+    return _send_guarded_email(user=user, event_key="verify_email", payload=payload)
 
 
 def _send_registration_welcome_email(user: User) -> bool:
     payload = build_registration_welcome_email(user_name=user.nombre)
-    return send_email(
-        user.email,
-        payload.subject,
-        payload.html,
-        payload.text,
-        sender=payload.sender,
-        reply_to=payload.reply_to,
-    )
+    return _send_guarded_email(user=user, event_key="register_welcome", payload=payload)
 
 
 def _send_post_verification_welcome_email(user: User) -> bool:
     payload = build_post_verification_welcome_email(user_name=user.nombre, is_active=bool(user.activo))
-    return send_email(
-        user.email,
-        payload.subject,
-        payload.html,
-        payload.text,
-        sender=payload.sender,
-        reply_to=payload.reply_to,
-    )
+    return _send_guarded_email(user=user, event_key="post_verify_welcome", payload=payload)
 
 
 def _send_reset_password_email(user: User) -> bool:
     reset_url = _reset_password_link(user)
     payload = build_reset_password_email(user_name=user.nombre, reset_url=reset_url)
-    return send_email(
-        user.email,
-        payload.subject,
-        payload.html,
-        payload.text,
-        sender=payload.sender,
-        reply_to=payload.reply_to,
-    )
+    return _send_guarded_email(user=user, event_key="reset_password", payload=payload)
 
 
 def _send_password_changed_email(user: User) -> bool:
     payload = build_password_changed_email(user_name=user.nombre)
-    return send_email(
-        user.email,
-        payload.subject,
-        payload.html,
-        payload.text,
-        sender=payload.sender,
-        reply_to=payload.reply_to,
-    )
+    return _send_guarded_email(user=user, event_key="password_changed", payload=payload)
 
 
 def _verification_link(user: User) -> str:

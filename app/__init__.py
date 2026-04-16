@@ -53,6 +53,8 @@ def _migrate_legacy_sqlserver_users_table() -> None:
                     ultimo_login DATETIME2 NULL,
                     activo BIT NOT NULL CONSTRAINT DF_users_activo DEFAULT (1),
                     reset_requested_at DATETIME2 NULL,
+                    last_email_event NVARCHAR(80) NULL,
+                    last_email_sent_at DATETIME2 NULL,
                     profesor_id INT NULL,
                     seccion NVARCHAR(50) NULL,
                     CONSTRAINT FK_users_profesor FOREIGN KEY (profesor_id) REFERENCES dbo.users(id)
@@ -109,6 +111,7 @@ def _ensure_user_columns() -> None:
     datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
     int_type = "INT" if dialect_name == "mssql" else "INTEGER"
     text_type = "NVARCHAR(50)" if dialect_name == "mssql" else "VARCHAR(50)"
+    event_type = "NVARCHAR(80)" if dialect_name == "mssql" else "VARCHAR(80)"
     add_column_prefix = "ALTER TABLE users ADD" if dialect_name == "mssql" else "ALTER TABLE users ADD COLUMN"
 
     existing_columns = {column["name"] for column in inspector.get_columns("users")}
@@ -124,6 +127,10 @@ def _ensure_user_columns() -> None:
         statements.append(f"{add_column_prefix} activo {bool_type} NOT NULL DEFAULT 1")
     if "reset_requested_at" not in existing_columns:
         statements.append(f"{add_column_prefix} reset_requested_at {datetime_type}")
+    if "last_email_event" not in existing_columns:
+        statements.append(f"{add_column_prefix} last_email_event {event_type}")
+    if "last_email_sent_at" not in existing_columns:
+        statements.append(f"{add_column_prefix} last_email_sent_at {datetime_type}")
     if "profesor_id" not in existing_columns:
         statements.append(f"{add_column_prefix} profesor_id {int_type}")
     if "seccion" not in existing_columns:
@@ -167,6 +174,7 @@ def _ensure_evaluacion_columns() -> None:
     datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
     int_type = "INT" if dialect_name == "mssql" else "INTEGER"
     float_type = "FLOAT" if dialect_name == "mssql" else "FLOAT"
+    bool_type = "BIT" if dialect_name == "mssql" else "BOOLEAN"
     text_type = "NVARCHAR(MAX)" if dialect_name == "mssql" else "TEXT"
     short_text_type = "NVARCHAR(120)" if dialect_name == "mssql" else "VARCHAR(120)"
     id_text_type = "NVARCHAR(24)" if dialect_name == "mssql" else "VARCHAR(24)"
@@ -205,6 +213,17 @@ def _ensure_evaluacion_columns() -> None:
         statements.append(f"{add_column_prefix} tech_ability_score {float_type}")
     if "average_score" not in existing_columns:
         statements.append(f"{add_column_prefix} average_score {float_type}")
+    if "results_released" not in existing_columns:
+        if dialect_name == "mssql":
+            statements.append(
+                "ALTER TABLE evaluaciones "
+                "ADD results_released BIT NOT NULL "
+                "CONSTRAINT DF_evaluaciones_results_released DEFAULT 0"
+            )
+        else:
+            statements.append(
+                f"{add_column_prefix} results_released {bool_type} NOT NULL DEFAULT FALSE"
+            )
 
     for stmt in statements:
         db.session.execute(text(stmt))

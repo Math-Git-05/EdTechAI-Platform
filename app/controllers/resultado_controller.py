@@ -29,6 +29,9 @@ def index():
     if not evaluacion:
         flash("Debes completar la evaluacion antes de ver tus resultados.", "warning")
         return redirect(url_for("formulario.index"))
+    if not getattr(evaluacion, "results_released", False):
+        flash("Tus resultados aun estan en revision administrativa.", "info")
+        return redirect(url_for("estudiante.index"))
 
     recommendation = build_recommendation_for_student(student=current_user, evaluacion=evaluacion)
     primary = recommendation.get("primary_recommendation")

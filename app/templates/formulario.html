@@ -57,7 +57,11 @@
         {% endif %}
       </div>
       <div class="locked-actions">
-        <a href="{{ url_for('resultado.index') }}" class="btn btn-primary btn-sm">Ver resultado</a>
+        {% if resultados_publicados %}
+          <a href="{{ url_for('resultado.index') }}" class="btn btn-primary btn-sm">Ver resultado</a>
+        {% else %}
+          <span class="locked-text">Resultado en revision administrativa. Aun no publicado.</span>
+        {% endif %}
         <a href="{{ url_for('estudiante.index') }}" class="btn btn-secondary btn-sm">Volver al dashboard</a>
       </div>
     </div>
@@ -223,6 +227,7 @@
     const parsed = parseTallyMessage(e.data);
     if (parsed && (parsed.submissionId || parsed.payload)) {
       submissionSent = true;
+      let redirectUrl = "{{ url_for('estudiante.index') }}";
       fetch("{{ url_for('formulario.marcar_completada') }}", {
         method: "POST",
         headers: {
@@ -241,10 +246,16 @@
           });
         }
         return resp.json();
+      }).then(function(payload) {
+        if (payload && payload.next_url) {
+          redirectUrl = payload.next_url;
+        } else if (payload && payload.results_released) {
+          redirectUrl = "{{ url_for('resultado.index') }}";
+        }
       }).catch(function(err) {
         console.warn('No se pudo registrar evaluacion en backend', err);
       }).finally(function () {
-        window.location.href = "{{ url_for('resultado.index') }}";
+        window.location.href = redirectUrl;
       });
     }
   });
