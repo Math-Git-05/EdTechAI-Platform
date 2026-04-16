@@ -1,17 +1,23 @@
 import json
+import csv
+from datetime import datetime
+from io import StringIO
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 
 from app import db
+from app.models.calificacion import Calificacion
 from app.models.comentario_edit_request import ComentarioEditRequest
 from app.models.evaluacion import Evaluacion
+from app.models.grade_change_request import GradeChangeRequest
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.teacher_profile import TeacherProfile
 from app.models.user import User
 from app.services.profile_service import DEFAULT_SCHOOL_ID, LABOR_STATUS, normalize_student_id
 from app.services.settings_service import get_bool_setting
+from app.services.audit_log_service import log_audit_event
 from app.services.teacher_observation_service import upsert_teacher_observation
 
 profesor_bp = Blueprint('profesor', __name__)
@@ -29,6 +35,18 @@ def _mask_email(email: str | None) -> str:
     else:
         local_masked = local[:2] + "***"
     return f"{local_masked}@{domain}"
+
+
+def _csv_response(*, filename: str, fieldnames: list[str], rows: list[dict[str, object]]) -> Response:
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+    response = Response(buffer.getvalue(), mimetype="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 def _sync_teacher_observation_safe(*, student_id: int, teacher_id: int, comment: str, observed_at) -> bool:
@@ -59,6 +77,13 @@ def index():
         .all()
     )
     allow_email_view = get_bool_setting("allow_professor_view_student_email", default=False)
+    allow_professor_export_csv = get_bool_setting("allow_professor_export_csv", default=False)
+    pending_grade_requests = (
+        GradeChangeRequest.query.filter_by(profesor_id=current_user.id, status="pendiente")
+        .order_by(GradeChangeRequest.requested_at.desc())
+        .limit(80)
+        .all()
+    )
     student_email_display: dict[int, str] = {}
     for est in estudiantes:
         student_email_display[est.id] = est.email if allow_email_view else _mask_email(est.email)
@@ -143,7 +168,105 @@ def index():
         score_averages=score_averages,
         comentarios_por_estudiante=comentarios_por_estudiante,
         evaluaciones_por_estudiante=evaluaciones_por_estudiante,
+        allow_professor_export_csv=allow_professor_export_csv,
+        pending_grade_requests=pending_grade_requests,
     )
+
+
+@profesor_bp.route("/export/csv/<string:dataset>")
+@login_required
+def export_csv(dataset: str):
+    if current_user.role != "profesor":
+        flash("Solo profesores pueden exportar esta vista.", "warning")
+        return redirect(url_for("dashboard.index"))
+
+    if not get_bool_setting("allow_professor_export_csv", default=False):
+        flash("La exportacion CSV para profesor esta bloqueada por administracion.", "warning")
+        return redirect(url_for("profesor.index"))
+
+    dataset = (dataset or "").strip().lower()
+    now_tag = db.session.query(db.func.current_timestamp()).scalar()
+    now_tag_text = now_tag.strftime("%Y%m%d_%H%M") if now_tag else "export"
+    students = User.query.filter_by(role="estudiante", profesor_id=current_user.id).all()
+    student_ids = [item.id for item in students]
+
+    rows: list[dict[str, object]] = []
+    headers: list[str] = []
+    filename = f"profesor_{dataset}_{now_tag_text}.csv"
+
+    if dataset == "estudiantes":
+        headers = ["id", "nombre", "apellido", "email", "seccion", "rne", "activo"]
+        for student in students:
+            rows.append(
+                {
+                    "id": student.id,
+                    "nombre": student.nombre,
+                    "apellido": student.apellido,
+                    "email": student.email,
+                    "seccion": student.seccion or "",
+                    "rne": student.student_profile.student_id if student.student_profile else "",
+                    "activo": int(bool(student.activo)),
+                }
+            )
+    elif dataset == "calificaciones":
+        headers = ["id", "estudiante", "asignatura", "periodo", "anio", "valor", "observaciones"]
+        if student_ids:
+            grades = (
+                Calificacion.query.filter(Calificacion.estudiante_id.in_(student_ids))
+                .order_by(Calificacion.fecha_actualizacion.desc())
+                .all()
+            )
+        else:
+            grades = []
+        students_map = {student.id: student for student in students}
+        for grade in grades:
+            student = students_map.get(grade.estudiante_id)
+            rows.append(
+                {
+                    "id": grade.id,
+                    "estudiante": f"{student.nombre} {student.apellido}" if student else grade.estudiante_id,
+                    "asignatura": grade.asignatura,
+                    "periodo": grade.periodo or "",
+                    "anio": grade.anio or "",
+                    "valor": grade.valor,
+                    "observaciones": grade.observaciones or "",
+                }
+            )
+    elif dataset == "evaluaciones":
+        headers = ["evaluacion_id", "estudiante", "promedio", "origen", "fecha"]
+        if student_ids:
+            evals = (
+                Evaluacion.query.filter(Evaluacion.estudiante_id.in_(student_ids))
+                .order_by(Evaluacion.fecha_creacion.desc())
+                .all()
+            )
+        else:
+            evals = []
+        students_map = {student.id: student for student in students}
+        for evaluacion in evals:
+            student = students_map.get(evaluacion.estudiante_id)
+            rows.append(
+                {
+                    "evaluacion_id": evaluacion.id,
+                    "estudiante": f"{student.nombre} {student.apellido}" if student else evaluacion.estudiante_id,
+                    "promedio": evaluacion.average_score if evaluacion.average_score is not None else "",
+                    "origen": evaluacion.origen,
+                    "fecha": evaluacion.fecha_creacion.isoformat() if evaluacion.fecha_creacion else "",
+                }
+            )
+    else:
+        flash("Dataset CSV no disponible para profesor.", "warning")
+        return redirect(url_for("profesor.index"))
+
+    log_audit_event(
+        action="profesor.export.csv",
+        actor_user_id=current_user.id,
+        target_type="csv",
+        target_id=dataset,
+        metadata={"rows": len(rows)},
+    )
+    db.session.commit()
+    return _csv_response(filename=filename, fieldnames=headers, rows=rows)
 
 
 @profesor_bp.route("/perfil", methods=["GET", "POST"])
@@ -309,6 +432,14 @@ def comentarios_estudiante(estudiante_id):
             approved_request.used_at = db.func.current_timestamp()
             db.session.add(approved_request)
         db.session.commit()
+        log_audit_event(
+            action="profesor.comment.saved",
+            actor_user_id=current_user.id,
+            target_type="evaluacion",
+            target_id=evaluacion.id,
+            metadata={"estudiante_id": estudiante.id, "edit_mode": bool(editar_existente)},
+        )
+        db.session.commit()
         if not _sync_teacher_observation_safe(
             student_id=estudiante.id,
             teacher_id=current_user.id,
@@ -342,6 +473,21 @@ def comentarios_estudiante(estudiante_id):
         .order_by(ComentarioEditRequest.reviewed_at.desc())
         .first()
     )
+    grade_request_history = (
+        GradeChangeRequest.query.filter_by(
+            profesor_id=current_user.id,
+            estudiante_id=estudiante.id,
+        )
+        .order_by(GradeChangeRequest.requested_at.desc())
+        .limit(20)
+        .all()
+    )
+    existing_grades = (
+        Calificacion.query.filter_by(estudiante_id=estudiante.id)
+        .order_by(Calificacion.fecha_actualizacion.desc())
+        .limit(20)
+        .all()
+    )
     return render_template(
         "dashboard/profesor_comentarios.html",
         estudiante=estudiante,
@@ -349,6 +495,9 @@ def comentarios_estudiante(estudiante_id):
         evaluaciones=evaluaciones,
         pending_edit_request=pending_edit_request,
         approved_edit_request=approved_edit_request,
+        grade_request_history=grade_request_history,
+        existing_grades=existing_grades,
+        year_now=datetime.utcnow().year,
     )
 
 
@@ -406,5 +555,122 @@ def solicitar_edicion_comentarios(estudiante_id):
             )
         )
         flash("Solicitud de edicion enviada al administrador.", "success")
+    db.session.commit()
+    log_audit_event(
+        action="profesor.comment_edit_request.sent",
+        actor_user_id=current_user.id,
+        target_type="estudiante",
+        target_id=estudiante.id,
+        metadata={"has_note": bool(teacher_note)},
+    )
+    db.session.commit()
+    return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
+
+
+@profesor_bp.route("/estudiantes/<int:estudiante_id>/solicitar-calificacion", methods=["POST"])
+@login_required
+def solicitar_calificacion(estudiante_id):
+    if current_user.role != "profesor":
+        flash("Este panel esta disponible solo para profesores.", "warning")
+        return redirect(url_for("dashboard.index"))
+
+    estudiante = User.query.filter_by(
+        id=estudiante_id,
+        role="estudiante",
+        profesor_id=current_user.id,
+    ).first()
+    if not estudiante:
+        flash("No puedes solicitar calificaciones para ese estudiante.", "warning")
+        return redirect(url_for("profesor.index"))
+
+    asignatura = (request.form.get("asignatura") or "").strip()
+    periodo = (request.form.get("periodo") or "").strip() or None
+    anio_raw = (request.form.get("anio") or "").strip()
+    valor_raw = (request.form.get("valor") or "").strip()
+    observaciones = (request.form.get("observaciones") or "").strip() or None
+
+    if not asignatura:
+        flash("La asignatura es obligatoria.", "warning")
+        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
+
+    try:
+        valor = float(valor_raw)
+    except (TypeError, ValueError):
+        flash("La calificacion debe ser numerica.", "warning")
+        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
+    if valor < 0 or valor > 100:
+        flash("La calificacion debe estar entre 0 y 100.", "warning")
+        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
+
+    anio = None
+    if anio_raw:
+        try:
+            anio = int(anio_raw)
+        except ValueError:
+            flash("El ano de la calificacion es invalido.", "warning")
+            return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
+
+    existing_grade = (
+        Calificacion.query.filter_by(
+            estudiante_id=estudiante.id,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+        )
+        .order_by(Calificacion.fecha_actualizacion.desc())
+        .first()
+    )
+
+    pending = (
+        GradeChangeRequest.query.filter_by(
+            profesor_id=current_user.id,
+            estudiante_id=estudiante.id,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+            status="pendiente",
+        )
+        .order_by(GradeChangeRequest.requested_at.desc())
+        .first()
+    )
+    if pending:
+        pending.valor = valor
+        pending.observaciones = observaciones
+        pending.calificacion_id = existing_grade.id if existing_grade else None
+        pending.requested_at = db.func.current_timestamp()
+        db.session.add(pending)
+        flash("Solicitud de calificacion pendiente actualizada.", "info")
+        request_id = pending.id
+    else:
+        new_request = GradeChangeRequest(
+            profesor_id=current_user.id,
+            estudiante_id=estudiante.id,
+            calificacion_id=existing_grade.id if existing_grade else None,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+            valor=valor,
+            observaciones=observaciones,
+            status="pendiente",
+        )
+        db.session.add(new_request)
+        db.session.flush()
+        request_id = new_request.id
+        flash("Solicitud de calificacion enviada al administrador.", "success")
+    db.session.commit()
+
+    log_audit_event(
+        action="profesor.grade_request.created",
+        actor_user_id=current_user.id,
+        target_type="grade_request",
+        target_id=request_id,
+        metadata={
+            "estudiante_id": estudiante.id,
+            "asignatura": asignatura,
+            "periodo": periodo,
+            "anio": anio,
+            "valor": valor,
+        },
+    )
     db.session.commit()
     return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))

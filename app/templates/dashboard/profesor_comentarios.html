@@ -119,6 +119,105 @@
     {% endif %}
   </div>
 
+  <div class="request-box">
+    <h2>Solicitud de Calificacion</h2>
+    <p class="text-small">El profesor no guarda notas directo: se envian como solicitud para aprobacion del admin.</p>
+    <form method="POST" action="{{ url_for('profesor.solicitar_calificacion', estudiante_id=estudiante.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls" style="align-items:end;">
+        <div>
+          <label for="asignatura">Asignatura</label>
+          <input id="asignatura" name="asignatura" class="table-select" placeholder="Matematicas" required>
+        </div>
+        <div>
+          <label for="periodo">Periodo</label>
+          <input id="periodo" name="periodo" class="table-select" placeholder="periodo_1">
+        </div>
+        <div>
+          <label for="anio">Ano</label>
+          <input id="anio" name="anio" type="number" class="table-select" min="1990" max="2100" value="{{ year_now }}">
+        </div>
+        <div>
+          <label for="valor">Calificacion</label>
+          <input id="valor" name="valor" type="number" class="table-select" min="0" max="100" step="0.01" placeholder="89.5" required>
+        </div>
+      </div>
+      <div>
+        <label for="observaciones">Observaciones (opcional)</label>
+        <input id="observaciones" name="observaciones" class="table-select" placeholder="Contexto de la nota o criterio">
+      </div>
+      <div class="section-actions">
+        <button type="submit" class="btn-small">Enviar solicitud de calificacion</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-section">
+    <h2>Historial de Solicitudes de Calificacion</h2>
+    {% if grade_request_history %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Asignatura</th>
+              <th>Periodo</th>
+              <th>Ano</th>
+              <th>Nota</th>
+              <th>Estado</th>
+              <th>Solicitada</th>
+              <th>Nota admin</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in grade_request_history %}
+              <tr>
+                <td>#{{ item.id }}</td>
+                <td>{{ item.asignatura }}</td>
+                <td>{{ item.periodo or '-' }}</td>
+                <td>{{ item.anio or '-' }}</td>
+                <td>{{ '%.2f'|format(item.valor) }}</td>
+                <td>{{ item.status }}</td>
+                <td>{{ item.requested_at.strftime('%Y-%m-%d %H:%M') if item.requested_at else '-' }}</td>
+                <td>{{ item.admin_note or '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">Aun no hay solicitudes de calificacion para este estudiante.</p>
+    {% endif %}
+
+    {% if existing_grades %}
+      <h3 style="margin-top: 14px;">Calificaciones actuales del estudiante</h3>
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Asignatura</th>
+              <th>Periodo</th>
+              <th>Ano</th>
+              <th>Nota</th>
+              <th>Actualizada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for grade in existing_grades %}
+              <tr>
+                <td>{{ grade.asignatura }}</td>
+                <td>{{ grade.periodo or '-' }}</td>
+                <td>{{ grade.anio or '-' }}</td>
+                <td>{{ '%.2f'|format(grade.valor) }}</td>
+                <td>{{ grade.fecha_actualizacion.strftime('%Y-%m-%d %H:%M') if grade.fecha_actualizacion else '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </div>
+
   <div class="estudiantes-section">
     <h2>Historial y Comentarios</h2>
     {% if evaluaciones %}

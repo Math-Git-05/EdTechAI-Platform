@@ -68,6 +68,20 @@
     </div>
   </div>
 
+  <div class="admin-section" style="margin-bottom: 14px;">
+    <h2>Accesos rapidos</h2>
+    <div class="section-actions">
+      {% if allow_professor_export_csv %}
+        <a href="{{ url_for('profesor.export_csv', dataset='estudiantes') }}" class="btn btn-secondary btn-sm">CSV estudiantes</a>
+        <a href="{{ url_for('profesor.export_csv', dataset='calificaciones') }}" class="btn btn-secondary btn-sm">CSV calificaciones</a>
+        <a href="{{ url_for('profesor.export_csv', dataset='evaluaciones') }}" class="btn btn-secondary btn-sm">CSV evaluaciones</a>
+      {% else %}
+        <span class="text-muted text-small">Exportacion CSV bloqueada por administracion.</span>
+      {% endif %}
+      <span class="text-muted text-small">Solicitudes de calificacion pendientes: {{ pending_grade_requests|length }}</span>
+    </div>
+  </div>
+
   <div class="panel-tabs" role="tablist" aria-label="Panel del profesor">
     <button type="button" class="panel-tab active" data-target="panel-aptitudes">Promedios de Aptitudes</button>
     <button type="button" class="panel-tab" data-target="panel-estudiantes">Estudiantes</button>

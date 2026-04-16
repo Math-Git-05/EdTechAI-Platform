@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, render_template, url_for
 from flask_login import current_user, login_required
 
@@ -14,6 +16,7 @@ from app.services.evaluacion_service import (
 from app.services.form_response_service import upsert_form_response_from_tally
 from app.services.prediction_persistence_service import upsert_ai_prediction_for_evaluacion
 from app.services.recommendation_engine_service import build_recommendation_for_student
+from app.services.settings_service import get_bool_setting, get_datetime_setting
 from app.services.tally_service import (
     apply_sheet_scores_to_evaluacion,
     apply_submission_to_evaluacion,
@@ -21,6 +24,7 @@ from app.services.tally_service import (
     fetch_scores_from_submissions_sheet,
     fetch_submission_from_tally,
 )
+from app.services.audit_log_service import log_audit_event
 
 formulario_bp = Blueprint('formulario', __name__, url_prefix='/formulario')
 
@@ -35,6 +39,29 @@ def _evaluacion_tally_completada(estudiante_id: int):
 
 def _results_released(evaluacion: Evaluacion | None) -> bool:
     return bool(evaluacion and getattr(evaluacion, "results_released", False))
+
+
+def _evaluation_window_state() -> dict[str, object]:
+    enabled = get_bool_setting("evaluation_window_enabled", default=False)
+    start_dt = get_datetime_setting("evaluation_window_start")
+    end_dt = get_datetime_setting("evaluation_window_end")
+    now = datetime.utcnow()
+    is_open = True
+    reason = "open"
+    if enabled:
+        if start_dt and now < start_dt:
+            is_open = False
+            reason = "pending_open"
+        elif end_dt and now > end_dt:
+            is_open = False
+            reason = "closed"
+    return {
+        "enabled": enabled,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+        "is_open": is_open,
+        "reason": reason,
+    }
 
 
 def _sync_ai_prediction_safe(*, student, evaluacion) -> str | None:
@@ -55,6 +82,18 @@ def _sync_ai_prediction_safe(*, student, evaluacion) -> str | None:
             getattr(student, "id", None),
         )
         return "No se pudo sincronizar ai_predictions para esta evaluacion."
+    finally:
+        try:
+            log_audit_event(
+                action="prediction.sync.attempt",
+                actor_user_id=getattr(student, "id", None),
+                target_type="evaluacion",
+                target_id=getattr(evaluacion, "id", None),
+                metadata={"student_id": getattr(student, "id", None)},
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 
 def _build_external_url(endpoint: str, **kwargs) -> str:
@@ -98,6 +137,13 @@ def index():
     if current_user.role != "estudiante":
         flash("Solo estudiantes pueden completar el formulario de aptitudes.", "warning")
         return redirect(url_for("dashboard.index"))
+    eval_window = _evaluation_window_state()
+    if not eval_window["is_open"]:
+        if eval_window["reason"] == "pending_open":
+            flash("La evaluacion aun no abre segun la ventana configurada por administracion.", "info")
+        else:
+            flash("La ventana de evaluacion esta cerrada por administracion.", "warning")
+        return redirect(url_for("estudiante.index"))
     evaluacion_existente = _evaluacion_tally_completada(current_user.id)
     return render_template(
         "formulario.html",
@@ -150,6 +196,18 @@ def resultado(resultado_id):
 def marcar_completada():
     if current_user.role != "estudiante":
         return jsonify({"ok": False, "error": "forbidden"}), 403
+    eval_window = _evaluation_window_state()
+    if not eval_window["is_open"]:
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "error": "evaluation_window_closed",
+                    "message": "La ventana de evaluacion esta cerrada por administracion.",
+                }
+            ),
+            403,
+        )
 
     payload = request.get_json(silent=True) or {}
     raw_tally_payload = payload.get("tally_payload")

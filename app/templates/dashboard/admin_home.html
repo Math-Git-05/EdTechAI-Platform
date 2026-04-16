@@ -2,7 +2,7 @@
 {% block title %}Admin Home - EdTech{% endblock %}
 
 {% block admin_content %}
-{% set pending_total = solicitudes_perfil|length + solicitudes_comentario|length + solicitudes_cuenta_verificacion_count + solicitudes_cuenta_aprobacion_count %}
+{% set pending_total = solicitudes_perfil|length + solicitudes_comentario|length + solicitudes_calificacion_count + solicitudes_cuenta_verificacion_count + solicitudes_cuenta_aprobacion_count %}
 <div class="admin-page">
   <div class="welcome-section">
     <div class="welcome-card">
@@ -55,6 +55,10 @@
     <div class="stat-card">
       <div class="stat-number js-count" data-count-to="{{ pending_total }}" data-decimals="0">0</div>
       <div class="stat-label">Solicitudes pendientes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-number js-count" data-count-to="{{ solicitudes_calificacion_count }}" data-decimals="0">0</div>
+      <div class="stat-label">Solicitudes de calificacion</div>
     </div>
     <div class="stat-card">
       <div class="stat-number js-count" data-count-to="{{ solicitudes_cuenta_verificacion_count }}" data-decimals="0">0</div>

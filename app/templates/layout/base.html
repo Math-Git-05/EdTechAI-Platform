@@ -113,6 +113,17 @@
     {% endif %}
   </nav>
 
+  {% if maintenance_mode_enabled and (not current_user.is_authenticated or current_user.role != 'admin') %}
+    <div class="flash-container" style="padding-top:10px;">
+      <div class="alert alert-warning">Maintenance Mode activo: acceso limitado temporalmente.</div>
+    </div>
+  {% endif %}
+  {% if demo_mode_enabled %}
+    <div class="flash-container" style="padding-top:10px;">
+      <div class="alert alert-info">Demo Mode activo: cambios restringidos para proteger produccion.</div>
+    </div>
+  {% endif %}
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <div class="flash-container" id="flash-container" style="padding-top:12px;">

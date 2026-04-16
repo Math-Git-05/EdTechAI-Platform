@@ -110,6 +110,10 @@
       <span class="sidebar-icon">SC</span>
       <span class="sidebar-label">Specialty Controls</span>
     </a>
+    <a href="{{ url_for('admin.audit_logs') }}" class="sidebar-link {% if admin_active == 'audit' %}active{% endif %}">
+      <span class="sidebar-icon">LG</span>
+      <span class="sidebar-label">Audit Logs</span>
+    </a>
     <div class="sidebar-spacer"></div>
     <a href="{{ url_for('dashboard.index') }}" class="sidebar-link">
       <span class="sidebar-icon">&#8592;</span>

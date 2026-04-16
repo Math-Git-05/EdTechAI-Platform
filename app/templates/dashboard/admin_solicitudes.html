@@ -1,4 +1,4 @@
-{% extends "dashboard/admin_shell.html" %}
+﻿{% extends "dashboard/admin_shell.html" %}
 {% block title %}Solicitudes - Admin EdTech{% endblock %}
 
 {% block admin_content %}
@@ -6,7 +6,7 @@
   <div class="welcome-section">
     <div class="welcome-card">
       <h1>Centro de Solicitudes</h1>
-      <p>Gestiona solicitudes de cuenta, edición de perfil y edición de comentarios desde un solo lugar.</p>
+      <p>Gestiona solicitudes de cuenta, ediciÃ³n de perfil y ediciÃ³n de comentarios desde un solo lugar.</p>
     </div>
   </div>
 
@@ -27,12 +27,16 @@
       <div class="stat-number">{{ solicitudes_comentario|length }}</div>
       <div class="stat-label">Solicitudes de comentarios</div>
     </div>
+    <div class="stat-card">
+      <div class="stat-number">{{ solicitudes_calificacion_count }}</div>
+      <div class="stat-label">Solicitudes de calificaciones</div>
+    </div>
   </div>
 
   <div class="admin-section">
-    <h2>Solicitudes de Creación y Acceso de Cuenta</h2>
+    <h2>Solicitudes de CreaciÃ³n y Acceso de Cuenta</h2>
 
-    <h3 style="margin:0 0 10px 0;">1) Cuentas pendientes de verificación de correo</h3>
+    <h3 style="margin:0 0 10px 0;">1) Cuentas pendientes de verificaciÃ³n de correo</h3>
     {% if solicitudes_cuenta_verificacion %}
       <div class="users-table" style="margin-bottom: 18px;">
         <table>
@@ -72,10 +76,10 @@
         </table>
       </div>
     {% else %}
-      <p class="text-muted text-small" style="margin-bottom:14px;">No hay cuentas pendientes de verificación de correo.</p>
+      <p class="text-muted text-small" style="margin-bottom:14px;">No hay cuentas pendientes de verificaciÃ³n de correo.</p>
     {% endif %}
 
-    <h3 style="margin:0 0 10px 0;">2) Cuentas verificadas pendientes de aprobación de acceso</h3>
+    <h3 style="margin:0 0 10px 0;">2) Cuentas verificadas pendientes de aprobaciÃ³n de acceso</h3>
     {% if solicitudes_cuenta_aprobacion %}
       <div class="users-table">
         <table>
@@ -115,18 +119,18 @@
         </table>
       </div>
     {% else %}
-      <p class="text-muted text-small">No hay cuentas pendientes de aprobación de acceso.</p>
+      <p class="text-muted text-small">No hay cuentas pendientes de aprobaciÃ³n de acceso.</p>
     {% endif %}
   </div>
 
   <div class="admin-section">
-    <h2>Solicitudes de Edición de Perfil</h2>
+    <h2>Solicitudes de EdiciÃ³n de Perfil</h2>
     {% if solicitudes_perfil %}
       <form method="POST" action="{{ url_for('admin.revisar_solicitudes_masiva') }}" class="bulk-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="bulk-controls">
           <div>
-            <label for="accion_solicitudes">Acción masiva</label>
+            <label for="accion_solicitudes">AcciÃ³n masiva</label>
             <select id="accion_solicitudes" name="accion_solicitudes" class="table-select">
               <option value="aprobar">Aprobar seleccionadas</option>
               <option value="rechazar">Rechazar seleccionadas</option>
@@ -180,7 +184,7 @@
                     {% if solicitud.requester and solicitud.requester.student_profile %}
                       <div class="text-small">RNE: {{ solicitud.requester.student_profile.student_id or '-' }}</div>
                       <div class="text-small">Grado: {{ solicitud.requester.student_profile.grado_nivel or '-' }}</div>
-                        <div class="text-small">Género: {{ solicitud.requester.student_profile.genero or '-' }}</div>
+                        <div class="text-small">GÃ©nero: {{ solicitud.requester.student_profile.genero or '-' }}</div>
                     {% elif solicitud.requester and solicitud.requester.teacher_profile %}
                       <div class="text-small">Empleado: {{ solicitud.requester.teacher_profile.employee_id or '-' }}</div>
                       <div class="text-small">Depto: {{ solicitud.requester.teacher_profile.departamento or '-' }}</div>
@@ -195,18 +199,18 @@
                         <div class="text-small mt-1">Nombre: {{ payload.get('nombre', '-') }} {{ payload.get('apellido', '') }}</div>
                         <div class="text-small">RNE: {{ student_payload.get('student_id', '-') }}</div>
                         <div class="text-small">2do apellido: {{ student_payload.get('segundo_apellido', '-') }}</div>
-                        <div class="text-small">Género: {{ student_payload.get('genero', '-') }}</div>
+                        <div class="text-small">GÃ©nero: {{ student_payload.get('genero', '-') }}</div>
                         <div class="text-small">Nacimiento: {{ student_payload.get('fecha_nacimiento', '-') }}</div>
                         <div class="text-small">Grado/Nivel: {{ student_payload.get('grado_nivel', '-') }}</div>
                         <div class="text-small">Centro: {{ student_payload.get('school_id', '-') }}</div>
-                        <div class="text-small">Año ingreso: {{ student_payload.get('enrollment_year', '-') }}</div>
-                        <div class="text-small">Estado académico: {{ student_payload.get('academic_status', '-') }}</div>
+                        <div class="text-small">AÃ±o ingreso: {{ student_payload.get('enrollment_year', '-') }}</div>
+                        <div class="text-small">Estado acadÃ©mico: {{ student_payload.get('academic_status', '-') }}</div>
                       {% elif role_payload == 'profesor' %}
                         <div class="text-small mt-1">Nombre: {{ payload.get('nombre', '-') }} {{ payload.get('apellido', '') }}</div>
                         <div class="text-small">Empleado: {{ teacher_payload.get('employee_id', '-') }}</div>
                         <div class="text-small">Especialidad: {{ teacher_payload.get('especialidad', '-') }}</div>
                         <div class="text-small">Departamento: {{ teacher_payload.get('departamento', '-') }}</div>
-                        <div class="text-small">Teléfono: {{ teacher_payload.get('telefono', '-') }}</div>
+                        <div class="text-small">TelÃ©fono: {{ teacher_payload.get('telefono', '-') }}</div>
                         <div class="text-small">Centro: {{ teacher_payload.get('school_id', '-') }}</div>
                         <div class="text-small">Estado laboral: {{ teacher_payload.get('labor_status', '-') }}</div>
                       {% else %}
@@ -250,12 +254,12 @@
         </div>
       </form>
     {% else %}
-      <p class="empty-state">No hay solicitudes pendientes de edición de perfil.</p>
+      <p class="empty-state">No hay solicitudes pendientes de ediciÃ³n de perfil.</p>
     {% endif %}
   </div>
 
   <div class="admin-section">
-    <h2>Solicitudes de Edición de Comentarios (Profesores)</h2>
+    <h2>Solicitudes de EdiciÃ³n de Comentarios (Profesores)</h2>
     {% if solicitudes_comentario %}
       <div class="users-table">
         <table>
@@ -325,7 +329,90 @@
         </table>
       </div>
     {% else %}
-      <p class="empty-state">No hay solicitudes pendientes de edición de comentarios.</p>
+      <p class="empty-state">No hay solicitudes pendientes de ediciÃ³n de comentarios.</p>
+    {% endif %}
+  </div>
+
+  <div class="admin-section">
+    <h2>Solicitudes de Calificaciones (Profesores)</h2>
+    {% if solicitudes_calificacion %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Profesor</th>
+              <th>Estudiante</th>
+              <th>Asignatura</th>
+              <th>Periodo</th>
+              <th>Ano</th>
+              <th>Nota</th>
+              <th>Observacion</th>
+              <th>Solicitada</th>
+              <th>Nota admin y acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for solicitud in solicitudes_calificacion %}
+              <tr>
+                <td>#{{ solicitud.id }}</td>
+                <td>
+                  {% if solicitud.profesor %}
+                    {{ solicitud.profesor.nombre }} {{ solicitud.profesor.apellido }}
+                  {% else %}
+                    Profesor no disponible
+                  {% endif %}
+                </td>
+                <td>
+                  {% if solicitud.estudiante %}
+                    {{ solicitud.estudiante.nombre }} {{ solicitud.estudiante.apellido }}
+                    {% if solicitud.estudiante.student_profile %}
+                      <br><span class="text-muted text-small">{{ solicitud.estudiante.student_profile.student_id }}</span>
+                    {% endif %}
+                  {% else %}
+                    Estudiante no disponible
+                  {% endif %}
+                </td>
+                <td>{{ solicitud.asignatura }}</td>
+                <td>{{ solicitud.periodo or '-' }}</td>
+                <td>{{ solicitud.anio or '-' }}</td>
+                <td>{{ '%.2f'|format(solicitud.valor) }}</td>
+                <td>{{ solicitud.observaciones or '-' }}</td>
+                <td>{{ solicitud.requested_at.strftime('%Y-%m-%d %H:%M') if solicitud.requested_at else '-' }}</td>
+                <td style="min-width: 220px;">
+                  <form method="POST" style="display:flex; gap:8px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input
+                      type="text"
+                      name="admin_note_grade_{{ solicitud.id }}"
+                      class="table-select"
+                      placeholder="Nota admin"
+                    >
+                    <button
+                      type="submit"
+                      class="btn-small"
+                      formaction="{{ url_for('admin.aprobar_solicitud_calificacion', solicitud_id=solicitud.id) }}"
+                      formmethod="post"
+                    >
+                      Aprobar
+                    </button>
+                    <button
+                      type="submit"
+                      class="btn-small"
+                      formaction="{{ url_for('admin.rechazar_solicitud_calificacion', solicitud_id=solicitud.id) }}"
+                      formmethod="post"
+                    >
+                      Rechazar
+                    </button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay solicitudes pendientes de calificaciones.</p>
     {% endif %}
   </div>
 </div>
@@ -344,3 +431,4 @@
   }
 </script>
 {% endblock %}
+

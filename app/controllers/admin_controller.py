@@ -1,16 +1,20 @@
-from datetime import datetime
+import csv
+from datetime import date, datetime, timedelta
+from io import StringIO
 import json
 
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, Response, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import case, func, inspect, or_, text
 from werkzeug.security import generate_password_hash
 
 from app import db
+from app.models.audit_log import AuditLog
 from app.models.academic_score import AcademicScore
 from app.models.calificacion import Calificacion
 from app.models.comentario_edit_request import ComentarioEditRequest
 from app.models.evaluacion import Evaluacion
+from app.models.grade_change_request import GradeChangeRequest
 from app.models.profile_edit_request import ProfileEditRequest
 from app.models.student_interest import StudentInterest
 from app.models.student_profile import StudentProfile
@@ -35,7 +39,13 @@ from app.services.academic_score_service import (
 from app.services.evaluacion_service import best_track_from_evaluacion, score_cards_from_evaluacion
 from app.services.prediction_persistence_service import upsert_ai_prediction_for_evaluacion
 from app.services.recommendation_engine_service import build_recommendation_for_student
-from app.services.settings_service import get_bool_setting, set_setting
+from app.services.settings_service import (
+    get_bool_setting,
+    get_datetime_setting,
+    get_setting,
+    set_bool_setting,
+    set_setting,
+)
 from app.services.student_data_sync_service import delete_student_data_if_exists, sync_student_data_if_exists
 from app.services.student_interest_service import sync_student_interest_from_profile
 from app.services.tally_service import (
@@ -44,6 +54,7 @@ from app.services.tally_service import (
     fetch_scores_from_submissions_sheet,
     fetch_submission_from_tally,
 )
+from app.services.audit_log_service import log_audit_event
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -78,6 +89,16 @@ ASIGNATURAS_PREDEFINIDAS = [
     "Ciencias sociales",
     "Ciencias naturales",
 ]
+
+SETTING_ALLOW_PROF_EMAIL = "allow_professor_view_student_email"
+SETTING_ALLOW_ADMIN_CSV = "allow_admin_export_csv"
+SETTING_ALLOW_PROF_CSV = "allow_professor_export_csv"
+SETTING_DEMO_MODE = "demo_mode_enabled"
+SETTING_MAINTENANCE_MODE = "maintenance_mode_enabled"
+SETTING_AUDIT_ENABLED = "enable_audit_logs"
+SETTING_EVAL_WINDOW_ENABLED = "evaluation_window_enabled"
+SETTING_EVAL_WINDOW_START = "evaluation_window_start"
+SETTING_EVAL_WINDOW_END = "evaluation_window_end"
 
 
 def _check_admin_access():
@@ -124,6 +145,69 @@ def _redirect_back(default_endpoint: str):
 
 def _is_delete_confirmed() -> bool:
     return (request.form.get("confirm_token") or "").strip().upper() == "ELIMINAR"
+
+
+def _normalize_datetime_local(value: str | None) -> str | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    try:
+        # datetime-local form: YYYY-MM-DDTHH:MM
+        parsed = datetime.fromisoformat(raw)
+        return parsed.replace(second=0, microsecond=0).isoformat(timespec="minutes")
+    except ValueError:
+        return None
+
+
+def _evaluation_window_snapshot() -> dict[str, object]:
+    enabled = get_bool_setting(SETTING_EVAL_WINDOW_ENABLED, default=False)
+    start_dt = get_datetime_setting(SETTING_EVAL_WINDOW_START)
+    end_dt = get_datetime_setting(SETTING_EVAL_WINDOW_END)
+    now = datetime.utcnow()
+    is_open = True
+    reason = "open"
+    if enabled:
+        if start_dt and now < start_dt:
+            is_open = False
+            reason = "pending_open"
+        elif end_dt and now > end_dt:
+            is_open = False
+            reason = "closed"
+    return {
+        "enabled": enabled,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+        "is_open": is_open,
+        "reason": reason,
+    }
+
+
+def _csv_response(*, filename: str, fieldnames: list[str], rows: list[dict[str, object]]) -> Response:
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row)
+
+    payload = buffer.getvalue()
+    response = Response(payload, mimetype="text/csv; charset=utf-8")
+    response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def _mask_email(email: str | None) -> str:
+    value = (email or "").strip()
+    if "@" not in value:
+        return "***"
+    local, domain = value.split("@", 1)
+    local = local.strip()
+    domain = domain.strip()
+    if len(local) <= 2:
+        local_masked = local[:1] + "***"
+    else:
+        local_masked = local[:2] + "***"
+    return f"{local_masked}@{domain}"
 
 
 def _remove_student_shadow_data(*, user_id: int, student_id: str | None) -> None:
@@ -208,6 +292,7 @@ def _delete_academic_profile_for_user(usuario: User) -> tuple[bool, list[str]]:
         # Datos academicos ligados al perfil del estudiante.
         AcademicScore.query.filter_by(estudiante_id=usuario.id).delete(synchronize_session=False)
         Calificacion.query.filter_by(estudiante_id=usuario.id).delete(synchronize_session=False)
+        GradeChangeRequest.query.filter_by(estudiante_id=usuario.id).delete(synchronize_session=False)
         removed_sections.append("scores y calificaciones")
 
         usuario.seccion = None
@@ -269,11 +354,21 @@ def _delete_user_hard(usuario: User) -> None:
         {"reviewed_by": None},
         synchronize_session=False,
     )
+    GradeChangeRequest.query.filter_by(reviewed_by=usuario.id).update(
+        {"reviewed_by": None},
+        synchronize_session=False,
+    )
 
     ComentarioEditRequest.query.filter(
         or_(
             ComentarioEditRequest.profesor_id == usuario.id,
             ComentarioEditRequest.estudiante_id == usuario.id,
+        )
+    ).delete(synchronize_session=False)
+    GradeChangeRequest.query.filter(
+        or_(
+            GradeChangeRequest.profesor_id == usuario.id,
+            GradeChangeRequest.estudiante_id == usuario.id,
         )
     ).delete(synchronize_session=False)
     ProfileEditRequest.query.filter_by(user_id=usuario.id).delete(synchronize_session=False)
@@ -480,6 +575,72 @@ def _review_profile_request(solicitud: ProfileEditRequest, action: str, note: st
     solicitud.reviewed_by = current_user.id
     solicitud.reviewed_at = db.func.current_timestamp()
     db.session.add(solicitud)
+    log_audit_event(
+        action="admin.profile_request.reviewed",
+        actor_user_id=current_user.id,
+        target_type="profile_request",
+        target_id=solicitud.id,
+        metadata={"status": solicitud.status, "requester_id": solicitud.user_id},
+    )
+
+
+def _review_grade_request(solicitud: GradeChangeRequest, action: str, note: str | None = None) -> Calificacion | None:
+    if solicitud.status != "pendiente":
+        raise ValueError("La solicitud ya fue revisada.")
+
+    action = (action or "").strip().lower()
+    if action not in {"aprobar", "rechazar"}:
+        raise ValueError("Accion invalida para solicitud de calificacion.")
+
+    applied_grade = None
+    if action == "aprobar":
+        target_grade = None
+        if solicitud.calificacion_id:
+            target_grade = Calificacion.query.get(solicitud.calificacion_id)
+        if not target_grade:
+            target_grade = (
+                Calificacion.query.filter_by(
+                    estudiante_id=solicitud.estudiante_id,
+                    asignatura=solicitud.asignatura,
+                    periodo=solicitud.periodo,
+                    anio=solicitud.anio,
+                )
+                .order_by(Calificacion.fecha_actualizacion.desc())
+                .first()
+            )
+
+        if not target_grade:
+            target_grade = Calificacion(
+                estudiante_id=solicitud.estudiante_id,
+                asignatura=solicitud.asignatura,
+                periodo=solicitud.periodo,
+                anio=solicitud.anio,
+                valor=solicitud.valor,
+                observaciones=solicitud.observaciones,
+            )
+        else:
+            target_grade.valor = solicitud.valor
+            target_grade.observaciones = solicitud.observaciones
+            target_grade.periodo = solicitud.periodo
+            target_grade.anio = solicitud.anio
+            target_grade.asignatura = solicitud.asignatura
+
+        db.session.add(target_grade)
+        db.session.flush()
+        solicitud.calificacion_id = target_grade.id
+        solicitud.status = "aprobada"
+        applied_grade = target_grade
+    else:
+        solicitud.status = "rechazada"
+
+    solicitud.admin_note = (note or "").strip() or None
+    solicitud.reviewed_by = current_user.id
+    solicitud.reviewed_at = db.func.current_timestamp()
+    db.session.add(solicitud)
+
+    if applied_grade:
+        recalculate_academic_scores_for_student(solicitud.estudiante_id)
+    return applied_grade
 
 
 def _dashboard_context():
@@ -580,6 +741,12 @@ def _dashboard_context():
         .limit(100)
         .all()
     )
+    solicitudes_calificacion = (
+        GradeChangeRequest.query.filter_by(status="pendiente")
+        .order_by(GradeChangeRequest.requested_at.asc())
+        .limit(160)
+        .all()
+    )
     solicitudes_cuenta_verificacion = (
         User.query.filter(
             User.role.in_(["estudiante", "profesor"]),
@@ -602,6 +769,31 @@ def _dashboard_context():
     for solicitud in solicitudes_perfil:
         solicitud.parsed_payload = _load_request_payload(solicitud)
 
+    today = datetime.utcnow().date()
+    first_day_current_month = today.replace(day=1)
+    month_starts: list[date] = []
+    cursor = first_day_current_month
+    for _ in range(5, -1, -1):
+        month_starts.append(cursor)
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    month_starts.reverse()
+    month_counts: dict[str, int] = {item.strftime("%Y-%m"): 0 for item in month_starts}
+    earliest_dt = datetime.combine(month_starts[0], datetime.min.time())
+    evaluaciones_fecha = (
+        Evaluacion.query.with_entities(Evaluacion.fecha_creacion)
+        .filter(Evaluacion.fecha_creacion.isnot(None), Evaluacion.fecha_creacion >= earliest_dt)
+        .all()
+    )
+    for row in evaluaciones_fecha:
+        fecha = row[0]
+        if not fecha:
+            continue
+        key = fecha.strftime("%Y-%m")
+        if key in month_counts:
+            month_counts[key] += 1
+    trend_labels = [item.strftime("%b %Y") for item in month_starts]
+    trend_values = [month_counts[item.strftime("%Y-%m")] for item in month_starts]
+
     return {
         "total_users": total_users,
         "estudiantes_count": estudiantes_count,
@@ -623,10 +815,14 @@ def _dashboard_context():
         "year_options": year_options,
         "solicitudes_perfil": solicitudes_perfil,
         "solicitudes_comentario": solicitudes_comentario,
+        "solicitudes_calificacion": solicitudes_calificacion,
         "solicitudes_cuenta_verificacion": solicitudes_cuenta_verificacion,
         "solicitudes_cuenta_aprobacion": solicitudes_cuenta_aprobacion,
         "solicitudes_cuenta_verificacion_count": len(solicitudes_cuenta_verificacion),
         "solicitudes_cuenta_aprobacion_count": len(solicitudes_cuenta_aprobacion),
+        "solicitudes_calificacion_count": len(solicitudes_calificacion),
+        "eval_trend_labels": trend_labels,
+        "eval_trend_values": trend_values,
         "submissions_sheet_url": current_app.config.get("TALLY_SUBMISSIONS_SHEET_URL"),
     }
 
@@ -694,23 +890,417 @@ def specialty_controls():
     if not _check_admin_access():
         return redirect(url_for("dashboard.index"))
 
-    setting_key = "allow_professor_view_student_email"
-
     if request.method == "POST":
         allow_email_view = _bool_from_form("allow_professor_view_student_email", default=False)
-        set_setting(setting_key, "1" if allow_email_view else "0")
+        allow_admin_csv = _bool_from_form("allow_admin_export_csv", default=True)
+        allow_prof_csv = _bool_from_form("allow_professor_export_csv", default=False)
+        demo_mode_enabled = _bool_from_form("demo_mode_enabled", default=False)
+        maintenance_mode_enabled = _bool_from_form("maintenance_mode_enabled", default=False)
+        audit_logs_enabled = _bool_from_form("enable_audit_logs", default=True)
+        eval_window_enabled = _bool_from_form("evaluation_window_enabled", default=False)
+
+        eval_window_start = _normalize_datetime_local(request.form.get("evaluation_window_start"))
+        eval_window_end = _normalize_datetime_local(request.form.get("evaluation_window_end"))
+        if eval_window_enabled and eval_window_start and eval_window_end and eval_window_start > eval_window_end:
+            flash("La ventana de evaluacion es invalida: la apertura debe ser antes del cierre.", "warning")
+            return redirect(url_for("admin.specialty_controls"))
+
+        set_bool_setting(SETTING_ALLOW_PROF_EMAIL, allow_email_view)
+        set_bool_setting(SETTING_ALLOW_ADMIN_CSV, allow_admin_csv)
+        set_bool_setting(SETTING_ALLOW_PROF_CSV, allow_prof_csv)
+        set_bool_setting(SETTING_DEMO_MODE, demo_mode_enabled)
+        set_bool_setting(SETTING_MAINTENANCE_MODE, maintenance_mode_enabled)
+        set_bool_setting(SETTING_AUDIT_ENABLED, audit_logs_enabled)
+        set_bool_setting(SETTING_EVAL_WINDOW_ENABLED, eval_window_enabled)
+        set_setting(SETTING_EVAL_WINDOW_START, eval_window_start)
+        set_setting(SETTING_EVAL_WINDOW_END, eval_window_end)
         db.session.commit()
-        if allow_email_view:
-            flash("Specialty Control aplicado: profesor puede ver correos completos.", "success")
-        else:
-            flash("Specialty Control aplicado: correo del estudiante enmascarado para profesores.", "success")
+
+        log_audit_event(
+            action="admin.specialty_controls.update",
+            actor_user_id=current_user.id,
+            target_type="system",
+            target_id="specialty_controls",
+            metadata={
+                "allow_professor_view_student_email": allow_email_view,
+                "allow_admin_export_csv": allow_admin_csv,
+                "allow_professor_export_csv": allow_prof_csv,
+                "demo_mode_enabled": demo_mode_enabled,
+                "maintenance_mode_enabled": maintenance_mode_enabled,
+                "enable_audit_logs": audit_logs_enabled,
+                "evaluation_window_enabled": eval_window_enabled,
+                "evaluation_window_start": eval_window_start,
+                "evaluation_window_end": eval_window_end,
+            },
+        )
+        db.session.commit()
+        flash("Specialty Controls actualizados correctamente.", "success")
         return redirect(url_for("admin.specialty_controls"))
 
-    allow_email_view = get_bool_setting(setting_key, default=False)
+    allow_email_view = get_bool_setting(SETTING_ALLOW_PROF_EMAIL, default=False)
+    allow_admin_csv = get_bool_setting(SETTING_ALLOW_ADMIN_CSV, default=True)
+    allow_prof_csv = get_bool_setting(SETTING_ALLOW_PROF_CSV, default=False)
+    demo_mode_enabled = get_bool_setting(SETTING_DEMO_MODE, default=False)
+    maintenance_mode_enabled = get_bool_setting(SETTING_MAINTENANCE_MODE, default=False)
+    audit_logs_enabled = get_bool_setting(SETTING_AUDIT_ENABLED, default=True)
+    eval_window_enabled = get_bool_setting(SETTING_EVAL_WINDOW_ENABLED, default=False)
+    eval_window_start = (get_setting(SETTING_EVAL_WINDOW_START, "") or "").strip()
+    eval_window_end = (get_setting(SETTING_EVAL_WINDOW_END, "") or "").strip()
+    window_snapshot = _evaluation_window_snapshot()
+    audit_recent = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(20).all()
+
     return render_template(
         "dashboard/admin_specialty_controls.html",
         admin_active="specialty_controls",
         allow_professor_view_student_email=allow_email_view,
+        allow_admin_export_csv=allow_admin_csv,
+        allow_professor_export_csv=allow_prof_csv,
+        demo_mode_enabled=demo_mode_enabled,
+        maintenance_mode_enabled=maintenance_mode_enabled,
+        enable_audit_logs=audit_logs_enabled,
+        evaluation_window_enabled=eval_window_enabled,
+        evaluation_window_start=eval_window_start,
+        evaluation_window_end=eval_window_end,
+        evaluation_window_status=window_snapshot,
+        audit_recent=audit_recent,
+        **_dashboard_context(),
+    )
+
+
+@admin_bp.route("/specialty-controls/reset-demo", methods=["POST"])
+@login_required
+def reset_demo_data():
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+    if (request.form.get("confirm_token") or "").strip().upper() != "RESET":
+        flash("Confirmacion invalida. Escribe RESET para restaurar el entorno demo.", "warning")
+        return redirect(url_for("admin.specialty_controls"))
+
+    removed_demo_users = 0
+    removed_demo_eval = 0
+    removed_demo_grades = 0
+    removed_demo_grade_requests = 0
+    restored_demo_users = 0
+    restored_demo_eval = 0
+
+    demo_users = User.query.filter(User.email.ilike("%@demo.local")).all()
+    demo_user_ids: list[int] = []
+    for demo_user in demo_users:
+        if _is_root_admin_user(demo_user):
+            continue
+        if demo_user.id == current_user.id:
+            continue
+        demo_user_ids.append(demo_user.id)
+        _delete_user_hard(demo_user)
+        removed_demo_users += 1
+
+    eval_filters = [Evaluacion.origen == "demo"]
+    if demo_user_ids:
+        eval_filters.append(Evaluacion.estudiante_id.in_(demo_user_ids))
+    removed_demo_eval = Evaluacion.query.filter(or_(*eval_filters)).delete(synchronize_session=False) or 0
+
+    grade_filters = [Calificacion.observaciones.ilike("[DEMO]%")]
+    if demo_user_ids:
+        grade_filters.append(Calificacion.estudiante_id.in_(demo_user_ids))
+    removed_demo_grades = Calificacion.query.filter(or_(*grade_filters)).delete(synchronize_session=False) or 0
+
+    grade_request_filters = [GradeChangeRequest.observaciones.ilike("[DEMO]%")]
+    if demo_user_ids:
+        grade_request_filters.extend(
+            [
+                GradeChangeRequest.estudiante_id.in_(demo_user_ids),
+                GradeChangeRequest.profesor_id.in_(demo_user_ids),
+            ]
+        )
+    removed_demo_grade_requests = (
+        GradeChangeRequest.query.filter(or_(*grade_request_filters)).delete(synchronize_session=False) or 0
+    )
+
+    demo_prof_email = "demo.profesor@demo.local"
+    demo_student_email = "demo.estudiante@demo.local"
+    demo_prof = User.query.filter(func.lower(User.email) == demo_prof_email).first()
+    if not demo_prof:
+        demo_prof = User(
+            nombre="Demo",
+            apellido="Profesor",
+            email=demo_prof_email,
+            password=generate_password_hash("Demo#12345"),
+            role="profesor",
+            activo=True,
+            email_verificado=True,
+            email_verificado_at=datetime.utcnow(),
+        )
+        db.session.add(demo_prof)
+        restored_demo_users += 1
+    else:
+        demo_prof.nombre = "Demo"
+        demo_prof.apellido = "Profesor"
+        demo_prof.role = "profesor"
+        demo_prof.activo = True
+        demo_prof.email_verificado = True
+        demo_prof.email_verificado_at = demo_prof.email_verificado_at or datetime.utcnow()
+        db.session.add(demo_prof)
+
+    db.session.flush()
+    demo_student = User.query.filter(func.lower(User.email) == demo_student_email).first()
+    if not demo_student:
+        demo_student = User(
+            nombre="Demo",
+            apellido="Estudiante",
+            email=demo_student_email,
+            password=generate_password_hash("Demo#12345"),
+            role="estudiante",
+            activo=True,
+            email_verificado=True,
+            email_verificado_at=datetime.utcnow(),
+            profesor_id=demo_prof.id,
+            seccion="A",
+        )
+        db.session.add(demo_student)
+        restored_demo_users += 1
+    else:
+        demo_student.nombre = "Demo"
+        demo_student.apellido = "Estudiante"
+        demo_student.role = "estudiante"
+        demo_student.activo = True
+        demo_student.email_verificado = True
+        demo_student.email_verificado_at = demo_student.email_verificado_at or datetime.utcnow()
+        demo_student.profesor_id = demo_prof.id
+        demo_student.seccion = "A"
+        db.session.add(demo_student)
+
+    db.session.flush()
+    demo_eval = Evaluacion(
+        estudiante_id=demo_student.id,
+        estado="completada",
+        origen="demo",
+        results_released=False,
+        logical_reasoning_score=74.0,
+        problem_resolution_score=78.0,
+        detail_attention_score=71.0,
+        creativity_score=83.0,
+        tech_ability_score=80.0,
+        average_score=77.2,
+        matricula_estudiante=(
+            demo_student.student_profile.student_id
+            if getattr(demo_student, "student_profile", None)
+            else None
+        ),
+    )
+    db.session.add(demo_eval)
+    restored_demo_eval += 1
+    db.session.commit()
+
+    try:
+        _sync_ai_prediction_safe(demo_eval)
+    except Exception:
+        db.session.rollback()
+
+    log_audit_event(
+        action="admin.demo.reset",
+        actor_user_id=current_user.id,
+        target_type="demo_data",
+        metadata={
+            "removed_demo_users": removed_demo_users,
+            "removed_demo_evaluaciones": removed_demo_eval,
+            "removed_demo_calificaciones": removed_demo_grades,
+            "removed_demo_grade_requests": removed_demo_grade_requests,
+            "restored_demo_users": restored_demo_users,
+            "restored_demo_evaluaciones": restored_demo_eval,
+        },
+    )
+    db.session.commit()
+
+    flash(
+        "Reset demo aplicado. "
+        f"Usuarios demo: {removed_demo_users}, evaluaciones demo: {removed_demo_eval}, "
+        f"calificaciones demo: {removed_demo_grades}, solicitudes demo: {removed_demo_grade_requests}. "
+        f"Restaurados: usuarios {restored_demo_users}, evaluaciones {restored_demo_eval}.",
+        "success",
+    )
+    return redirect(url_for("admin.specialty_controls"))
+
+
+@admin_bp.route("/export/csv/<string:dataset>")
+@login_required
+def export_csv(dataset: str):
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+
+    if not get_bool_setting(SETTING_ALLOW_ADMIN_CSV, default=True):
+        flash("La exportacion CSV para administradores esta desactivada en Specialty Controls.", "warning")
+        return redirect(url_for("admin.specialty_controls"))
+
+    dataset = (dataset or "").strip().lower()
+    now_tag = datetime.utcnow().strftime("%Y%m%d_%H%M")
+    rows: list[dict[str, object]] = []
+    headers: list[str] = []
+    filename = f"export_{dataset}_{now_tag}.csv"
+
+    if dataset == "usuarios":
+        headers = ["id", "nombre", "apellido", "email", "role", "activo", "email_verificado", "seccion", "fecha_creacion"]
+        for user in _visible_users_query().order_by(User.fecha_creacion.desc()).all():
+            rows.append(
+                {
+                    "id": user.id,
+                    "nombre": user.nombre,
+                    "apellido": user.apellido,
+                    "email": user.email,
+                    "role": user.role,
+                    "activo": int(bool(user.activo)),
+                    "email_verificado": int(bool(user.email_verificado)),
+                    "seccion": user.seccion or "",
+                    "fecha_creacion": user.fecha_creacion.isoformat() if user.fecha_creacion else "",
+                }
+            )
+    elif dataset == "calificaciones":
+        headers = [
+            "id",
+            "estudiante_id",
+            "estudiante",
+            "rne",
+            "asignatura",
+            "periodo",
+            "anio",
+            "valor",
+            "observaciones",
+            "fecha_actualizacion",
+        ]
+        calificaciones = Calificacion.query.order_by(Calificacion.fecha_actualizacion.desc()).limit(8000).all()
+        for item in calificaciones:
+            student = User.query.get(item.estudiante_id)
+            rows.append(
+                {
+                    "id": item.id,
+                    "estudiante_id": item.estudiante_id,
+                    "estudiante": f"{student.nombre} {student.apellido}" if student else "",
+                    "rne": (student.student_profile.student_id if student and student.student_profile else ""),
+                    "asignatura": item.asignatura,
+                    "periodo": item.periodo or "",
+                    "anio": item.anio or "",
+                    "valor": item.valor,
+                    "observaciones": item.observaciones or "",
+                    "fecha_actualizacion": item.fecha_actualizacion.isoformat() if item.fecha_actualizacion else "",
+                }
+            )
+    elif dataset == "asignaciones":
+        headers = ["estudiante_id", "estudiante", "rne", "seccion", "profesor_id", "profesor", "correo_estudiante"]
+        students = User.query.filter_by(role="estudiante").order_by(User.nombre.asc(), User.apellido.asc()).all()
+        for student in students:
+            teacher = User.query.get(student.profesor_id) if student.profesor_id else None
+            rows.append(
+                {
+                    "estudiante_id": student.id,
+                    "estudiante": f"{student.nombre} {student.apellido}",
+                    "rne": student.student_profile.student_id if student.student_profile else "",
+                    "seccion": student.seccion or "",
+                    "profesor_id": teacher.id if teacher else "",
+                    "profesor": f"{teacher.nombre} {teacher.apellido}" if teacher else "",
+                    "correo_estudiante": student.email,
+                }
+            )
+    elif dataset == "resultados":
+        headers = [
+            "estudiante_id",
+            "estudiante",
+            "rne",
+            "evaluacion_id",
+            "promedio",
+            "tecnico_recomendado",
+            "resultado_publicado",
+            "fecha_resultado",
+        ]
+        students = User.query.filter_by(role="estudiante").order_by(User.nombre.asc(), User.apellido.asc()).all()
+        for student in students:
+            evaluacion = (
+                Evaluacion.query.filter_by(estudiante_id=student.id, origen="tally")
+                .order_by(Evaluacion.fecha_creacion.desc())
+                .first()
+            )
+            if evaluacion:
+                tecnico, _ = best_track_from_evaluacion(evaluacion)
+            else:
+                tecnico = ""
+            rows.append(
+                {
+                    "estudiante_id": student.id,
+                    "estudiante": f"{student.nombre} {student.apellido}",
+                    "rne": student.student_profile.student_id if student.student_profile else "",
+                    "evaluacion_id": evaluacion.id if evaluacion else "",
+                    "promedio": evaluacion.average_score if evaluacion else "",
+                    "tecnico_recomendado": tecnico,
+                    "resultado_publicado": int(bool(evaluacion and evaluacion.results_released)),
+                    "fecha_resultado": (
+                        (evaluacion.submitted_at or evaluacion.fecha_creacion).isoformat()
+                        if evaluacion and (evaluacion.submitted_at or evaluacion.fecha_creacion)
+                        else ""
+                    ),
+                }
+            )
+    elif dataset == "solicitudes":
+        headers = ["tipo", "id", "status", "solicitante_id", "estudiante_id", "requested_at", "reviewed_at"]
+        for req in ProfileEditRequest.query.order_by(ProfileEditRequest.requested_at.desc()).limit(1200).all():
+            rows.append(
+                {
+                    "tipo": "perfil",
+                    "id": req.id,
+                    "status": req.status,
+                    "solicitante_id": req.user_id,
+                    "estudiante_id": "",
+                    "requested_at": req.requested_at.isoformat() if req.requested_at else "",
+                    "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else "",
+                }
+            )
+        for req in ComentarioEditRequest.query.order_by(ComentarioEditRequest.requested_at.desc()).limit(1200).all():
+            rows.append(
+                {
+                    "tipo": "comentario",
+                    "id": req.id,
+                    "status": req.status,
+                    "solicitante_id": req.profesor_id,
+                    "estudiante_id": req.estudiante_id,
+                    "requested_at": req.requested_at.isoformat() if req.requested_at else "",
+                    "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else "",
+                }
+            )
+        for req in GradeChangeRequest.query.order_by(GradeChangeRequest.requested_at.desc()).limit(1200).all():
+            rows.append(
+                {
+                    "tipo": "calificacion",
+                    "id": req.id,
+                    "status": req.status,
+                    "solicitante_id": req.profesor_id,
+                    "estudiante_id": req.estudiante_id,
+                    "requested_at": req.requested_at.isoformat() if req.requested_at else "",
+                    "reviewed_at": req.reviewed_at.isoformat() if req.reviewed_at else "",
+                }
+            )
+        rows.sort(key=lambda item: item.get("requested_at") or "", reverse=True)
+    else:
+        flash("Dataset CSV no reconocido.", "warning")
+        return redirect(url_for("admin.specialty_controls"))
+
+    log_audit_event(
+        action="admin.export.csv",
+        actor_user_id=current_user.id,
+        target_type="csv",
+        target_id=dataset,
+        metadata={"rows": len(rows)},
+    )
+    db.session.commit()
+    return _csv_response(filename=filename, fieldnames=headers, rows=rows)
+
+
+@admin_bp.route("/audit-logs")
+@login_required
+def audit_logs():
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(500).all()
+    return render_template(
+        "dashboard/admin_audit_logs.html",
+        admin_active="audit",
+        audit_logs=logs,
         **_dashboard_context(),
     )
 
@@ -804,6 +1394,14 @@ def toggle_resultado_release(evaluacion_id: int):
 
     evaluacion.results_released = should_release
     db.session.add(evaluacion)
+    db.session.commit()
+    log_audit_event(
+        action="admin.result_release.toggle",
+        actor_user_id=current_user.id,
+        target_type="evaluacion",
+        target_id=evaluacion.id,
+        metadata={"released": bool(should_release), "estudiante_id": evaluacion.estudiante_id},
+    )
     db.session.commit()
 
     if should_release:
@@ -1791,6 +2389,14 @@ def aprobar_solicitud_comentario(solicitud_id):
     solicitud.reviewed_at = db.func.current_timestamp()
     db.session.add(solicitud)
     db.session.commit()
+    log_audit_event(
+        action="admin.comment_request.approved",
+        actor_user_id=current_user.id,
+        target_type="comment_request",
+        target_id=solicitud.id,
+        metadata={"profesor_id": solicitud.profesor_id, "estudiante_id": solicitud.estudiante_id},
+    )
+    db.session.commit()
     flash(f"Solicitud de comentario #{solicitud.id} aprobada.", "success")
     return redirect(url_for("admin.solicitudes"))
 
@@ -1818,7 +2424,89 @@ def rechazar_solicitud_comentario(solicitud_id):
     solicitud.reviewed_at = db.func.current_timestamp()
     db.session.add(solicitud)
     db.session.commit()
+    log_audit_event(
+        action="admin.comment_request.rejected",
+        actor_user_id=current_user.id,
+        target_type="comment_request",
+        target_id=solicitud.id,
+        metadata={"profesor_id": solicitud.profesor_id, "estudiante_id": solicitud.estudiante_id},
+    )
+    db.session.commit()
     flash(f"Solicitud de comentario #{solicitud.id} rechazada.", "info")
+    return redirect(url_for("admin.solicitudes"))
+
+
+@admin_bp.route("/solicitudes-calificacion/<int:solicitud_id>/aprobar", methods=["POST"])
+@login_required
+def aprobar_solicitud_calificacion(solicitud_id):
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+
+    solicitud = GradeChangeRequest.query.get_or_404(solicitud_id)
+    if solicitud.status != "pendiente":
+        flash("La solicitud de calificacion ya fue revisada.", "warning")
+        return redirect(url_for("admin.solicitudes"))
+
+    admin_note = (
+        request.form.get("admin_note")
+        or request.form.get(f"admin_note_grade_{solicitud_id}")
+        or ""
+    ).strip()
+    try:
+        applied_grade = _review_grade_request(solicitud, action="aprobar", note=admin_note)
+        db.session.commit()
+        log_audit_event(
+            action="admin.grade_request.approved",
+            actor_user_id=current_user.id,
+            target_type="grade_request",
+            target_id=solicitud.id,
+            metadata={
+                "estudiante_id": solicitud.estudiante_id,
+                "profesor_id": solicitud.profesor_id,
+                "calificacion_id": applied_grade.id if applied_grade else solicitud.calificacion_id,
+            },
+        )
+        db.session.commit()
+        flash(f"Solicitud de calificacion #{solicitud.id} aprobada.", "success")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("No se pudo aprobar solicitud de calificacion id=%s", solicitud_id)
+        flash("No se pudo aprobar la solicitud de calificacion.", "danger")
+    return redirect(url_for("admin.solicitudes"))
+
+
+@admin_bp.route("/solicitudes-calificacion/<int:solicitud_id>/rechazar", methods=["POST"])
+@login_required
+def rechazar_solicitud_calificacion(solicitud_id):
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+
+    solicitud = GradeChangeRequest.query.get_or_404(solicitud_id)
+    if solicitud.status != "pendiente":
+        flash("La solicitud de calificacion ya fue revisada.", "warning")
+        return redirect(url_for("admin.solicitudes"))
+
+    admin_note = (
+        request.form.get("admin_note")
+        or request.form.get(f"admin_note_grade_{solicitud_id}")
+        or ""
+    ).strip()
+    try:
+        _review_grade_request(solicitud, action="rechazar", note=admin_note)
+        db.session.commit()
+        log_audit_event(
+            action="admin.grade_request.rejected",
+            actor_user_id=current_user.id,
+            target_type="grade_request",
+            target_id=solicitud.id,
+            metadata={"estudiante_id": solicitud.estudiante_id, "profesor_id": solicitud.profesor_id},
+        )
+        db.session.commit()
+        flash(f"Solicitud de calificacion #{solicitud.id} rechazada.", "info")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("No se pudo rechazar solicitud de calificacion id=%s", solicitud_id)
+        flash("No se pudo rechazar la solicitud de calificacion.", "danger")
     return redirect(url_for("admin.solicitudes"))
 
 
@@ -1860,6 +2548,14 @@ def actualizar_rol(user_id):
             )
 
         db.session.commit()
+        log_audit_event(
+            action="admin.user.role_changed",
+            actor_user_id=current_user.id,
+            target_type="user",
+            target_id=usuario.id,
+            metadata={"from": rol_anterior, "to": nuevo_rol},
+        )
+        db.session.commit()
     except Exception:
         db.session.rollback()
         current_app.logger.exception(
@@ -1898,6 +2594,14 @@ def actualizar_estado(user_id):
     usuario.activo = activar
     db.session.add(usuario)
     db.session.commit()
+    log_audit_event(
+        action="admin.user.status_changed",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=usuario.id,
+        metadata={"activo": bool(activar)},
+    )
+    db.session.commit()
 
     estado_txt = "activado" if activar else "desactivado"
     flash(
@@ -1931,6 +2635,14 @@ def actualizar_verificacion(user_id):
         usuario.email_verificado_at = None
     db.session.add(usuario)
     db.session.commit()
+    log_audit_event(
+        action="admin.user.email_verification_changed",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=usuario.id,
+        metadata={"email_verificado": bool(verificado)},
+    )
+    db.session.commit()
 
     estado_txt = "verificado" if verificado else "marcado como no verificado"
     flash(f"Correo de {usuario.email} {estado_txt}.", "success")
@@ -1955,6 +2667,14 @@ def actualizar_seccion(user_id):
         return _redirect_back("admin.asignaciones")
     usuario.seccion = seccion
     db.session.add(usuario)
+    db.session.commit()
+    log_audit_event(
+        action="admin.user.section_changed",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=usuario.id,
+        metadata={"seccion": seccion or ""},
+    )
     db.session.commit()
     flash(f"Seccion actualizada para {usuario.nombre} {usuario.apellido}.", "success")
     return _redirect_back("admin.asignaciones")
@@ -1981,6 +2701,14 @@ def eliminar_usuario_login(user_id):
 
     original_email = usuario.email
     _disable_user_access(usuario)
+    db.session.commit()
+    log_audit_event(
+        action="admin.user.access_removed",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=usuario.id,
+        metadata={"email": original_email},
+    )
     db.session.commit()
     flash(
         f"Acceso eliminado para {original_email}. Se conservaron perfiles y datos academicos.",
@@ -2009,6 +2737,14 @@ def eliminar_perfil_academico(user_id):
         flash("El usuario no tiene perfil academico para eliminar.", "info")
         return _redirect_back("admin.usuarios")
 
+    db.session.commit()
+    log_audit_event(
+        action="admin.user.profile_deleted",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=usuario.id,
+        metadata={"removed_sections": removed_sections},
+    )
     db.session.commit()
     flash(
         f"Perfil academico eliminado para {usuario.nombre} {usuario.apellido}: {', '.join(removed_sections)}.",
@@ -2041,6 +2777,14 @@ def eliminar_usuario_completo(user_id):
     full_name = f"{usuario.nombre} {usuario.apellido}"
     original_email = usuario.email
     _delete_user_hard(usuario)
+    db.session.commit()
+    log_audit_event(
+        action="admin.user.deleted",
+        actor_user_id=current_user.id,
+        target_type="user",
+        target_id=user_id,
+        metadata={"email": original_email, "name": full_name},
+    )
     db.session.commit()
     flash(
         f"Usuario eliminado completamente: {full_name} ({original_email}).",
@@ -2120,6 +2864,14 @@ def usuarios_accion_masiva():
             _delete_user_hard(usuario)
         processed += 1
 
+    db.session.commit()
+    log_audit_event(
+        action="admin.user.bulk_action",
+        actor_user_id=current_user.id,
+        target_type="bulk_users",
+        target_id=action,
+        metadata={"processed": processed, "skipped": skipped},
+    )
     db.session.commit()
     if processed:
         flash(

@@ -1,22 +1,20 @@
-{% extends "dashboard/admin_shell.html" %}
+﻿{% extends "dashboard/admin_shell.html" %}
 {% block title %}Specialty Controls - Admin EdTech{% endblock %}
 
 {% block admin_content %}
-<div class="admin-page">
+<div class="admin-page wide">
   <div class="welcome-section">
     <div class="welcome-card">
       <h1>Specialty Controls</h1>
-      <p>Controles avanzados para privacidad y comportamiento visual del panel.</p>
+      <p>Controles avanzados de privacidad, exportaciones, mantenimiento, demo y auditoria.</p>
     </div>
   </div>
 
   <div class="admin-section">
-    <h2>Privacidad de Correos (Profesor)</h2>
-    <p class="text-small">
-      Si esta desactivado, el profesor vera el correo del estudiante enmascarado (ej: ma***@dominio.com).
-    </p>
+    <h2>Configuracion General</h2>
     <form method="POST" class="table-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
       <div class="bulk-controls" style="align-items:end;">
         <div>
           <label for="allow_professor_view_student_email">Visibilidad de correo para profesor</label>
@@ -25,20 +23,159 @@
             <option value="1" {% if allow_professor_view_student_email %}selected{% endif %}>Mostrar correo completo</option>
           </select>
         </div>
-        <div class="bulk-submit-wrap">
-          <button type="submit" class="btn btn-primary btn-sm">Guardar control</button>
+
+        <div>
+          <label for="allow_admin_export_csv">Exportacion CSV para admin</label>
+          <select id="allow_admin_export_csv" name="allow_admin_export_csv" class="table-select">
+            <option value="1" {% if allow_admin_export_csv %}selected{% endif %}>Habilitada</option>
+            <option value="0" {% if not allow_admin_export_csv %}selected{% endif %}>Bloqueada</option>
+          </select>
         </div>
+
+        <div>
+          <label for="allow_professor_export_csv">Exportacion CSV para profesor</label>
+          <select id="allow_professor_export_csv" name="allow_professor_export_csv" class="table-select">
+            <option value="0" {% if not allow_professor_export_csv %}selected{% endif %}>Bloqueada (Recomendado)</option>
+            <option value="1" {% if allow_professor_export_csv %}selected{% endif %}>Habilitada</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bulk-controls" style="align-items:end; margin-top: 10px;">
+        <div>
+          <label for="maintenance_mode_enabled">Maintenance Mode</label>
+          <select id="maintenance_mode_enabled" name="maintenance_mode_enabled" class="table-select">
+            <option value="0" {% if not maintenance_mode_enabled %}selected{% endif %}>Desactivado</option>
+            <option value="1" {% if maintenance_mode_enabled %}selected{% endif %}>Activado (solo admin entra)</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="demo_mode_enabled">Demo Mode</label>
+          <select id="demo_mode_enabled" name="demo_mode_enabled" class="table-select">
+            <option value="0" {% if not demo_mode_enabled %}selected{% endif %}>Desactivado</option>
+            <option value="1" {% if demo_mode_enabled %}selected{% endif %}>Activado (solo lectura para no admin)</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="enable_audit_logs">Enable audit logs</label>
+          <select id="enable_audit_logs" name="enable_audit_logs" class="table-select">
+            <option value="1" {% if enable_audit_logs %}selected{% endif %}>Activado</option>
+            <option value="0" {% if not enable_audit_logs %}selected{% endif %}>Desactivado</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bulk-controls" style="align-items:end; margin-top: 10px;">
+        <div>
+          <label for="evaluation_window_enabled">Ventana de evaluacion</label>
+          <select id="evaluation_window_enabled" name="evaluation_window_enabled" class="table-select">
+            <option value="0" {% if not evaluation_window_enabled %}selected{% endif %}>Sin ventana (siempre abierta)</option>
+            <option value="1" {% if evaluation_window_enabled %}selected{% endif %}>Activada por fecha</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="evaluation_window_start">Fecha apertura</label>
+          <input id="evaluation_window_start" name="evaluation_window_start" type="datetime-local" class="table-select" value="{{ evaluation_window_start }}">
+        </div>
+
+        <div>
+          <label for="evaluation_window_end">Fecha cierre</label>
+          <input id="evaluation_window_end" name="evaluation_window_end" type="datetime-local" class="table-select" value="{{ evaluation_window_end }}">
+        </div>
+
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-primary btn-sm">Guardar controles</button>
+        </div>
+      </div>
+    </form>
+
+    <p class="text-small" style="margin-top:10px;">
+      Estado ventana evaluacion:
+      <strong>
+        {% if evaluation_window_status.is_open %}
+          Abierta
+        {% elif evaluation_window_status.reason == 'pending_open' %}
+          Cerrada (aun no abre)
+        {% else %}
+          Cerrada
+        {% endif %}
+      </strong>
+      {% if evaluation_window_status.start_dt %}
+        | apertura {{ evaluation_window_status.start_dt.strftime('%Y-%m-%d %H:%M') }}
+      {% endif %}
+      {% if evaluation_window_status.end_dt %}
+        | cierre {{ evaluation_window_status.end_dt.strftime('%Y-%m-%d %H:%M') }}
+      {% endif %}
+    </p>
+  </div>
+
+  <div class="admin-section">
+    <h2>Exportaciones CSV Rapidas</h2>
+    <p class="text-small">Datasets clave para analisis externo y reportes institucionales.</p>
+    <div class="section-actions">
+      <a href="{{ url_for('admin.export_csv', dataset='usuarios') }}" class="btn btn-secondary btn-sm">Usuarios CSV</a>
+      <a href="{{ url_for('admin.export_csv', dataset='asignaciones') }}" class="btn btn-secondary btn-sm">Asignaciones CSV</a>
+      <a href="{{ url_for('admin.export_csv', dataset='calificaciones') }}" class="btn btn-secondary btn-sm">Calificaciones CSV</a>
+      <a href="{{ url_for('admin.export_csv', dataset='resultados') }}" class="btn btn-secondary btn-sm">Resultados CSV</a>
+      <a href="{{ url_for('admin.export_csv', dataset='solicitudes') }}" class="btn btn-secondary btn-sm">Solicitudes CSV</a>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Reset Demo Data</h2>
+    <p class="text-small">Borra datos de demo y pruebas marcadas para entorno de presentacion.</p>
+    <form method="POST" action="{{ url_for('admin.reset_demo_data') }}" class="bulk-controls" style="align-items:end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div>
+        <label for="confirm_token_demo">Confirmacion</label>
+        <input id="confirm_token_demo" name="confirm_token" class="table-select" placeholder="Escribe RESET" required>
+      </div>
+      <div class="bulk-submit-wrap">
+        <button type="submit" class="btn btn-secondary btn-sm">Reset Test Environment</button>
       </div>
     </form>
   </div>
 
   <div class="admin-section">
-    <h2>Sugerencias de Specialty Controls</h2>
-    <ul class="text-small" style="margin:0;padding-left:18px;line-height:1.7;">
-      <li>Bloquear descarga de listados por rol (profesor/admin).</li>
-      <li>Modo presentacion: ocultar datos sensibles en toda la UI para demostraciones.</li>
-      <li>Ventana de mantenimiento con mensaje global administrable.</li>
-    </ul>
+    <h2>Auditoria Reciente</h2>
+    <div class="section-actions" style="margin-bottom: 10px;">
+      <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-secondary btn-sm">Ver auditoria completa</a>
+    </div>
+    {% if audit_recent %}
+      <div class="users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Accion</th>
+              <th>Actor</th>
+              <th>Target</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in audit_recent %}
+              <tr>
+                <td>{{ item.created_at.strftime('%Y-%m-%d %H:%M') if item.created_at else '-' }}</td>
+                <td>{{ item.action }}</td>
+                <td>
+                  {% if item.actor %}
+                    {{ item.actor.nombre }} {{ item.actor.apellido }}
+                  {% else %}
+                    Sistema
+                  {% endif %}
+                </td>
+                <td>{{ item.target_type or '-' }} #{{ item.target_id or '-' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty-state">No hay eventos de auditoria recientes.</p>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

@@ -677,6 +677,101 @@ def _ensure_comentario_edit_request_columns() -> None:
         db.session.commit()
 
 
+def _ensure_grade_change_request_columns() -> None:
+    inspector = inspect(db.engine)
+    if "grade_change_requests" not in inspector.get_table_names():
+        return
+
+    dialect_name = db.engine.dialect.name
+    datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
+    int_type = "INT" if dialect_name == "mssql" else "INTEGER"
+    float_type = "FLOAT"
+    short_text_type = "NVARCHAR(20)" if dialect_name == "mssql" else "VARCHAR(20)"
+    text_type = "NVARCHAR(120)" if dialect_name == "mssql" else "VARCHAR(120)"
+    long_text_type = "NVARCHAR(MAX)" if dialect_name == "mssql" else "TEXT"
+    add_column_prefix = (
+        "ALTER TABLE grade_change_requests ADD"
+        if dialect_name == "mssql"
+        else "ALTER TABLE grade_change_requests ADD COLUMN"
+    )
+
+    existing_columns = {column["name"] for column in inspector.get_columns("grade_change_requests")}
+    statements = []
+
+    if "profesor_id" not in existing_columns:
+        statements.append(f"{add_column_prefix} profesor_id {int_type}")
+    if "estudiante_id" not in existing_columns:
+        statements.append(f"{add_column_prefix} estudiante_id {int_type}")
+    if "calificacion_id" not in existing_columns:
+        statements.append(f"{add_column_prefix} calificacion_id {int_type}")
+    if "asignatura" not in existing_columns:
+        statements.append(f"{add_column_prefix} asignatura {text_type}")
+    if "periodo" not in existing_columns:
+        statements.append(f"{add_column_prefix} periodo {short_text_type}")
+    if "anio" not in existing_columns:
+        statements.append(f"{add_column_prefix} anio {int_type}")
+    if "valor" not in existing_columns:
+        statements.append(f"{add_column_prefix} valor {float_type}")
+    if "observaciones" not in existing_columns:
+        statements.append(f"{add_column_prefix} observaciones {long_text_type}")
+    if "status" not in existing_columns:
+        statements.append(f"{add_column_prefix} status {short_text_type}")
+    if "admin_note" not in existing_columns:
+        statements.append(f"{add_column_prefix} admin_note {long_text_type}")
+    if "requested_at" not in existing_columns:
+        statements.append(f"{add_column_prefix} requested_at {datetime_type}")
+    if "reviewed_at" not in existing_columns:
+        statements.append(f"{add_column_prefix} reviewed_at {datetime_type}")
+    if "reviewed_by" not in existing_columns:
+        statements.append(f"{add_column_prefix} reviewed_by {int_type}")
+
+    for stmt in statements:
+        db.session.execute(text(stmt))
+
+    if statements:
+        db.session.commit()
+
+
+def _ensure_audit_log_columns() -> None:
+    inspector = inspect(db.engine)
+    if "audit_logs" not in inspector.get_table_names():
+        return
+
+    dialect_name = db.engine.dialect.name
+    datetime_type = "DATETIME2" if dialect_name == "mssql" else "DATETIME"
+    int_type = "INT" if dialect_name == "mssql" else "INTEGER"
+    text_type = "NVARCHAR(80)" if dialect_name == "mssql" else "VARCHAR(80)"
+    id_text_type = "NVARCHAR(120)" if dialect_name == "mssql" else "VARCHAR(120)"
+    long_text_type = "NVARCHAR(MAX)" if dialect_name == "mssql" else "TEXT"
+    add_column_prefix = (
+        "ALTER TABLE audit_logs ADD"
+        if dialect_name == "mssql"
+        else "ALTER TABLE audit_logs ADD COLUMN"
+    )
+
+    existing_columns = {column["name"] for column in inspector.get_columns("audit_logs")}
+    statements = []
+
+    if "actor_user_id" not in existing_columns:
+        statements.append(f"{add_column_prefix} actor_user_id {int_type}")
+    if "action" not in existing_columns:
+        statements.append(f"{add_column_prefix} action {text_type}")
+    if "target_type" not in existing_columns:
+        statements.append(f"{add_column_prefix} target_type {text_type}")
+    if "target_id" not in existing_columns:
+        statements.append(f"{add_column_prefix} target_id {id_text_type}")
+    if "metadata_json" not in existing_columns:
+        statements.append(f"{add_column_prefix} metadata_json {long_text_type}")
+    if "created_at" not in existing_columns:
+        statements.append(f"{add_column_prefix} created_at {datetime_type}")
+
+    for stmt in statements:
+        db.session.execute(text(stmt))
+
+    if statements:
+        db.session.commit()
+
+
 def _ensure_form_response_columns() -> None:
     inspector = inspect(db.engine)
     if "form_responses" not in inspector.get_table_names():
@@ -1305,11 +1400,23 @@ def create_app(env: str = "default"):
 
     @app.context_processor
     def inject_csrf_token():
+        from .services.settings_service import get_bool_setting
+
+        try:
+            maintenance_mode_enabled = get_bool_setting("maintenance_mode_enabled", default=False)
+            demo_mode_enabled = get_bool_setting("demo_mode_enabled", default=False)
+        except Exception:
+            db.session.rollback()
+            maintenance_mode_enabled = False
+            demo_mode_enabled = False
+
         context = {
             "csrf_token": generate_csrf,
             "nav_notifications": [],
             "nav_notifications_count": 0,
             "show_notification_toast": False,
+            "maintenance_mode_enabled": maintenance_mode_enabled,
+            "demo_mode_enabled": demo_mode_enabled,
         }
         try:
             is_authenticated = bool(current_user.is_authenticated)
@@ -1325,11 +1432,13 @@ def create_app(env: str = "default"):
         try:
             if current_user.role == "admin":
                 from .models.comentario_edit_request import ComentarioEditRequest
+                from .models.grade_change_request import GradeChangeRequest
                 from .models.profile_edit_request import ProfileEditRequest
                 from .models.user import User
 
                 profile_count = ProfileEditRequest.query.filter_by(status="pendiente").count()
                 comment_count = ComentarioEditRequest.query.filter_by(status="pendiente").count()
+                grade_request_count = GradeChangeRequest.query.filter_by(status="pendiente").count()
                 pending_email_verification = (
                     User.query.filter(
                         User.role.in_(["estudiante", "profesor"]),
@@ -1362,11 +1471,16 @@ def create_app(env: str = "default"):
                     context["nav_notifications"].append(
                         {"label": f"Usuarios pendientes de aprobacion: {pending_approval}", "url": url_for("admin.solicitudes")}
                     )
+                if grade_request_count:
+                    context["nav_notifications"].append(
+                        {"label": f"Solicitudes de calificaciones: {grade_request_count}", "url": url_for("admin.solicitudes")}
+                    )
                 context["nav_notifications_count"] = (
-                    profile_count + comment_count + pending_email_verification + pending_approval
+                    profile_count + comment_count + pending_email_verification + pending_approval + grade_request_count
                 )
             elif current_user.role == "profesor":
                 from .models.comentario_edit_request import ComentarioEditRequest
+                from .models.grade_change_request import GradeChangeRequest
                 from .models.profile_edit_request import ProfileEditRequest
 
                 profile_pending = ProfileEditRequest.query.filter_by(
@@ -1377,6 +1491,9 @@ def create_app(env: str = "default"):
                 ).count()
                 comment_approved = ComentarioEditRequest.query.filter_by(
                     profesor_id=current_user.id, status="aprobada"
+                ).count()
+                grade_pending = GradeChangeRequest.query.filter_by(
+                    profesor_id=current_user.id, status="pendiente"
                 ).count()
                 if profile_pending:
                     context["nav_notifications"].append(
@@ -1390,7 +1507,14 @@ def create_app(env: str = "default"):
                     context["nav_notifications"].append(
                         {"label": f"Permisos de edicion aprobados: {comment_approved}", "url": url_for("profesor.index")}
                     )
-                context["nav_notifications_count"] = profile_pending + comment_pending + comment_approved
+                if grade_pending:
+                    context["nav_notifications"].append(
+                        {
+                            "label": f"Solicitudes de calificacion pendientes: {grade_pending}",
+                            "url": url_for("profesor.index"),
+                        }
+                    )
+                context["nav_notifications_count"] = profile_pending + comment_pending + comment_approved + grade_pending
             elif current_user.role == "estudiante":
                 from .models.profile_edit_request import ProfileEditRequest
 
@@ -1407,6 +1531,54 @@ def create_app(env: str = "default"):
             app.logger.exception("Error cargando notificaciones de navegacion")
             return context
         return context
+
+    @app.before_request
+    def apply_runtime_modes():
+        from .services.settings_service import get_bool_setting
+
+        endpoint = request.endpoint or ""
+        if not endpoint:
+            return None
+
+        if endpoint.startswith("static"):
+            return None
+
+        try:
+            maintenance_mode = get_bool_setting("maintenance_mode_enabled", default=False)
+            demo_mode = get_bool_setting("demo_mode_enabled", default=False)
+        except Exception:
+            db.session.rollback()
+            return None
+
+        if maintenance_mode:
+            allow_maintenance_endpoints = {
+                "auth.login",
+                "auth.logout",
+                "auth.forgot_password",
+                "auth.reset_password",
+                "main.maintenance",
+            }
+            is_admin = bool(current_user.is_authenticated and current_user.role == "admin")
+            if not is_admin and endpoint not in allow_maintenance_endpoints:
+                if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+                    return {"ok": False, "error": "maintenance_mode"}, 503
+                return redirect(url_for("main.maintenance"))
+
+        if demo_mode and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            is_admin = bool(current_user.is_authenticated and current_user.role == "admin")
+            allow_demo_write_endpoints = {
+                "auth.login",
+                "auth.logout",
+                "auth.register",
+                "auth.forgot_password",
+                "auth.reset_password",
+            }
+            if not is_admin and endpoint not in allow_demo_write_endpoints:
+                if request.accept_mimetypes.accept_json and not request.accept_mimetypes.accept_html:
+                    return {"ok": False, "error": "demo_mode_readonly"}, 403
+                flash("Modo demo activo: solo administradores pueden aplicar cambios.", "warning")
+                return redirect(request.referrer or url_for("dashboard.index"))
+        return None
 
     @app.errorhandler(CSRFError)
     def handle_csrf_error(error):
@@ -1453,10 +1625,12 @@ def create_app(env: str = "default"):
     with app.app_context():
         # Carga modelos antes de create_all para registrar metadata completa.
         from .models.academic_score import AcademicScore  # noqa: F401
+        from .models.audit_log import AuditLog  # noqa: F401
         from .models.calificacion import Calificacion  # noqa: F401
         from .models.comentario_edit_request import ComentarioEditRequest  # noqa: F401
         from .models.evaluacion import Evaluacion  # noqa: F401
         from .models.form_response import FormResponse  # noqa: F401
+        from .models.grade_change_request import GradeChangeRequest  # noqa: F401
         from .models.profile_edit_request import ProfileEditRequest  # noqa: F401
         from .models.system_setting import SystemSetting  # noqa: F401
         from .models.student_interest import StudentInterest  # noqa: F401
@@ -1479,9 +1653,11 @@ def create_app(env: str = "default"):
             ("ensure_academic_scores_columns", _ensure_academic_scores_columns),
             ("ensure_profile_edit_request_columns", _ensure_profile_edit_request_columns),
             ("ensure_comentario_edit_request_columns", _ensure_comentario_edit_request_columns),
+            ("ensure_grade_change_request_columns", _ensure_grade_change_request_columns),
             ("ensure_form_response_columns", _ensure_form_response_columns),
             ("ensure_ai_predictions_columns", _ensure_ai_predictions_columns),
             ("ensure_teacher_observations_columns", _ensure_teacher_observations_columns),
+            ("ensure_audit_log_columns", _ensure_audit_log_columns),
             ("drop_legacy_student_interest_fk_if_present", _drop_legacy_student_interest_fk_if_present),
             ("normalize_academic_scores_legacy_columns", _normalize_academic_scores_legacy_columns),
             ("drop_unused_student_data_table_if_empty", _drop_unused_student_data_table_if_empty),
