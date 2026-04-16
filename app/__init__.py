@@ -245,6 +245,74 @@ def _ensure_evaluacion_columns() -> None:
         db.session.commit()
 
 
+def _ensure_root_admin_account(app: Flask) -> None:
+    root_email = (app.config.get("ROOT_ADMIN_EMAIL") or "").strip().lower()
+    if not root_email:
+        return
+
+    from datetime import datetime
+    import secrets
+
+    from werkzeug.security import generate_password_hash
+
+    from .models.user import User
+
+    root_first_name = (app.config.get("ROOT_ADMIN_FIRST_NAME") or "Admin").strip() or "Admin"
+    root_last_name = (app.config.get("ROOT_ADMIN_LAST_NAME") or "Root").strip() or "Root"
+    configured_password = (app.config.get("ROOT_ADMIN_PASSWORD") or "").strip()
+
+    user = User.query.filter(db.func.lower(User.email) == root_email).first()
+    if user:
+        changed = False
+        if user.role != "admin":
+            user.role = "admin"
+            changed = True
+        if not user.activo:
+            user.activo = True
+            changed = True
+        if not user.email_verificado:
+            user.email_verificado = True
+            user.email_verificado_at = user.email_verificado_at or datetime.utcnow()
+            changed = True
+        if not user.password:
+            generated_password = configured_password or secrets.token_urlsafe(18)
+            user.password = generate_password_hash(generated_password)
+            changed = True
+            if not configured_password:
+                app.logger.warning(
+                    "ROOT_ADMIN_PASSWORD no configurado; se genero una clave aleatoria para %s. "
+                    "Usa 'Olvide mi contrasena' para acceso inicial.",
+                    root_email,
+                )
+        if changed:
+            db.session.add(user)
+            db.session.commit()
+            app.logger.info("Cuenta root admin sincronizada: %s", root_email)
+        return
+
+    generated_password = configured_password or secrets.token_urlsafe(18)
+    user = User(
+        nombre=root_first_name,
+        apellido=root_last_name,
+        email=root_email,
+        password=generate_password_hash(generated_password),
+        role="admin",
+        email_verificado=True,
+        email_verificado_at=datetime.utcnow(),
+        activo=True,
+    )
+    db.session.add(user)
+    db.session.commit()
+    if configured_password:
+        app.logger.info("Cuenta root admin creada: %s", root_email)
+    else:
+        app.logger.warning(
+            "Cuenta root admin creada para %s con clave aleatoria. "
+            "Usa 'Olvide mi contrasena' para establecer una clave propia.",
+            root_email,
+        )
+
+
 def _ensure_student_profile_columns() -> None:
     inspector = inspect(db.engine)
     if "student_profiles" not in inspector.get_table_names():
@@ -1401,6 +1469,7 @@ def create_app(env: str = "default"):
         startup_steps = [
             ("create_all_initial", db.create_all),
             ("ensure_user_columns", _ensure_user_columns),
+            ("ensure_root_admin_account", lambda: _ensure_root_admin_account(app)),
             ("ensure_evaluacion_columns", _ensure_evaluacion_columns),
             ("ensure_student_profile_columns", _ensure_student_profile_columns),
             ("ensure_teacher_profile_columns", _ensure_teacher_profile_columns),

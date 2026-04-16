@@ -86,6 +86,25 @@ def _check_admin_access():
     return True
 
 
+def _root_admin_email() -> str:
+    return (current_app.config.get("ROOT_ADMIN_EMAIL") or "").strip().lower()
+
+
+def _is_root_admin_user(usuario: User | None) -> bool:
+    if not usuario:
+        return False
+    root_email = _root_admin_email()
+    return bool(root_email and (usuario.email or "").strip().lower() == root_email)
+
+
+def _visible_users_query():
+    root_email = _root_admin_email()
+    query = User.query
+    if root_email:
+        query = query.filter(func.lower(User.email) != root_email)
+    return query
+
+
 def _redirect_back(default_endpoint: str):
     referer = (request.referrer or "").strip()
     if referer:
@@ -454,15 +473,16 @@ def _review_profile_request(solicitud: ProfileEditRequest, action: str, note: st
 
 
 def _dashboard_context():
-    total_users = User.query.count()
-    estudiantes_count = User.query.filter_by(role="estudiante").count()
-    profesores_count = User.query.filter_by(role="profesor").count()
-    admins_count = User.query.filter_by(role="admin").count()
+    users_q = _visible_users_query()
+    total_users = users_q.count()
+    estudiantes_count = users_q.filter_by(role="estudiante").count()
+    profesores_count = users_q.filter_by(role="profesor").count()
+    admins_count = users_q.filter_by(role="admin").count()
     estudiantes_asignados_count = (
-        User.query.filter_by(role="estudiante").filter(User.profesor_id.isnot(None)).count()
+        users_q.filter_by(role="estudiante").filter(User.profesor_id.isnot(None)).count()
     )
     estudiantes_sin_asignar_count = (
-        User.query.filter_by(role="estudiante").filter(User.profesor_id.is_(None)).count()
+        users_q.filter_by(role="estudiante").filter(User.profesor_id.is_(None)).count()
     )
     evaluaciones_count = Evaluacion.query.count()
     evaluaciones_tally_count = Evaluacion.query.filter_by(origen="tally").count()
@@ -488,12 +508,12 @@ def _dashboard_context():
         "average_score": round(avg_row[5], 2) if avg_row and avg_row[5] is not None else None,
     }
 
-    usuarios = User.query.order_by(User.fecha_creacion.desc()).all()
+    usuarios = users_q.order_by(User.fecha_creacion.desc()).all()
     profesores = (
-        User.query.filter_by(role="profesor").order_by(User.nombre.asc(), User.apellido.asc()).all()
+        users_q.filter_by(role="profesor").order_by(User.nombre.asc(), User.apellido.asc()).all()
     )
     estudiantes = (
-        User.query.filter_by(role="estudiante")
+        users_q.filter_by(role="estudiante")
         .order_by(User.nombre.asc(), User.apellido.asc())
         .all()
     )
@@ -884,6 +904,10 @@ def editar_perfil_usuario(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no se edita desde este modulo.", "warning")
+        return redirect(url_for("admin.usuarios"))
+
     if usuario.role not in {"estudiante", "profesor"}:
         flash("Solo estudiantes o profesores tienen perfil editable.", "warning")
         return redirect(url_for("admin.usuarios"))
@@ -1756,6 +1780,10 @@ def actualizar_rol(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no puede cambiar de rol.", "warning")
+        return redirect(url_for("admin.usuarios"))
+
     nuevo_rol = (request.form.get("role") or "").strip().lower()
     if nuevo_rol not in ROLES_VALIDOS:
         flash("Rol invalido.", "danger")
@@ -1770,22 +1798,30 @@ def actualizar_rol(user_id):
         flash(f"El usuario {usuario.email} ya tiene rol {nuevo_rol}.", "info")
         return redirect(url_for("admin.usuarios"))
 
-    usuario.role = nuevo_rol
-    if nuevo_rol != "estudiante":
-        usuario.profesor_id = None
-        usuario.seccion = None
-        if usuario.student_profile:
-            db.session.delete(usuario.student_profile)
-    if nuevo_rol != "profesor" and usuario.teacher_profile:
-        db.session.delete(usuario.teacher_profile)
+    try:
+        # Conservamos perfiles academicos al cambiar de rol para permitir reversa sin perdida de datos.
+        usuario.role = nuevo_rol
+        if nuevo_rol != "estudiante":
+            usuario.profesor_id = None
+            usuario.seccion = None
 
-    if rol_anterior == "profesor" and nuevo_rol != "profesor":
-        User.query.filter_by(profesor_id=usuario.id).update(
-            {"profesor_id": None}, synchronize_session=False
+        if rol_anterior == "profesor" and nuevo_rol != "profesor":
+            User.query.filter_by(profesor_id=usuario.id).update(
+                {"profesor_id": None}, synchronize_session=False
+            )
+
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception(
+            "Fallo al actualizar rol user_id=%s de %s a %s",
+            user_id,
+            rol_anterior,
+            nuevo_rol,
         )
+        flash("No se pudo actualizar el rol del usuario. Intenta nuevamente.", "danger")
+        return redirect(url_for("admin.usuarios"))
 
-    db.session.add(usuario)
-    db.session.commit()
     flash(
         f"Rol actualizado: {usuario.nombre} {usuario.apellido} ahora es {nuevo_rol}.",
         "success",
@@ -1800,6 +1836,10 @@ def actualizar_estado(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no puede desactivarse.", "warning")
+        return _redirect_back("admin.usuarios")
+
     activar = (request.form.get("activo") or "").strip() in {"1", "true", "on", "True"}
 
     if usuario.id == current_user.id and not activar:
@@ -1825,6 +1865,10 @@ def actualizar_verificacion(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no puede modificar su verificacion.", "warning")
+        return _redirect_back("admin.usuarios")
+
     verificado = (request.form.get("email_verificado") or "").strip() in {
         "1",
         "true",
@@ -1874,6 +1918,10 @@ def eliminar_usuario_login(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no puede revocarse.", "warning")
+        return _redirect_back("admin.usuarios")
+
     if usuario.id == current_user.id:
         flash("No puedes eliminar tu propio acceso de administrador.", "warning")
         return _redirect_back("admin.usuarios")
@@ -1899,6 +1947,10 @@ def eliminar_perfil_academico(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no permite eliminar perfil.", "warning")
+        return _redirect_back("admin.usuarios")
+
     if not _is_delete_confirmed():
         flash("Confirmacion invalida. No se elimino el perfil academico.", "warning")
         return _redirect_back("admin.usuarios")
@@ -1923,6 +1975,10 @@ def eliminar_usuario_completo(user_id):
         return redirect(url_for("dashboard.index"))
 
     usuario = User.query.get_or_404(user_id)
+    if _is_root_admin_user(usuario):
+        flash("El administrador root esta protegido y no puede eliminarse.", "warning")
+        return _redirect_back("admin.usuarios")
+
     if usuario.id == current_user.id:
         flash("No puedes eliminar tu propia cuenta de administrador.", "warning")
         return _redirect_back("admin.usuarios")
@@ -1992,6 +2048,9 @@ def usuarios_accion_masiva():
     for user_id in selected_ids:
         usuario = user_by_id.get(user_id)
         if not usuario:
+            skipped += 1
+            continue
+        if _is_root_admin_user(usuario):
             skipped += 1
             continue
         if usuario.id == current_user.id:

@@ -87,6 +87,12 @@ class Config:
     )
     DROP_DEPRECATED_TABLES = os.getenv("DROP_DEPRECATED_TABLES", "false").strip().lower() == "true"
 
+    # Administrador root de recuperacion (oculto/protegido en panel admin)
+    ROOT_ADMIN_EMAIL = _env_first("ROOT_ADMIN_EMAIL", default="mathewhichez@hotmail.com").lower()
+    ROOT_ADMIN_FIRST_NAME = _env_first("ROOT_ADMIN_FIRST_NAME", default="Admin")
+    ROOT_ADMIN_LAST_NAME = _env_first("ROOT_ADMIN_LAST_NAME", default="Root")
+    ROOT_ADMIN_PASSWORD = _env_first("ROOT_ADMIN_PASSWORD")
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
