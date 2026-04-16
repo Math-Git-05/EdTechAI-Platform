@@ -26,10 +26,16 @@ def explorar_carreras():
 @main_bp.route("/maintenance")
 def maintenance():
     """Pantalla de mantenimiento para usuarios no admin."""
+    maintenance_eta_dt = get_datetime_setting("maintenance_eta_text")
+    maintenance_eta_text = (
+        maintenance_eta_dt.strftime("%Y-%m-%d %H:%M")
+        if maintenance_eta_dt
+        else (get_setting("maintenance_eta_text", "") or "").strip()
+    )
     return (
         render_template(
             "maintenance.html",
-            maintenance_eta_text=(get_setting("maintenance_eta_text", "") or "").strip(),
+            maintenance_eta_text=maintenance_eta_text,
             evaluation_window_start=get_datetime_setting("evaluation_window_start"),
             evaluation_window_end=get_datetime_setting("evaluation_window_end"),
         ),

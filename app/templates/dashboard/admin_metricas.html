@@ -1,11 +1,11 @@
 {% extends "dashboard/admin_shell.html" %}
-{% block title %}Metricas - Admin EdTech{% endblock %}
+{% block title %}Métricas - Admin EdTech{% endblock %}
 
 {% block admin_extra_head %}
 <style>
   .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
     gap: 14px;
     margin-bottom: 18px;
   }
@@ -103,7 +103,7 @@
 
   .line-svg {
     width: 100%;
-    height: 180px;
+    height: 190px;
     display: block;
   }
 
@@ -116,34 +116,29 @@
     margin-top: 6px;
   }
 
-  .audit-bar-row {
-    margin-bottom: 10px;
+  .metric-card-wide {
+    grid-column: 1 / -1;
   }
 
-  .audit-bar-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--text2);
-    margin-bottom: 5px;
+  .chart-pair {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 12px;
+    align-items: stretch;
   }
 
-  .audit-bar-track {
-    height: 10px;
-    border-radius: 999px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    overflow: hidden;
-  }
+  @media (max-width: 1180px) {
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
 
-  .audit-bar-fill {
-    height: 100%;
-    width: 0%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #16a34a, #22c55e);
-    transition: width 1s ease;
+    .metric-card-wide {
+      grid-column: auto;
+    }
+
+    .chart-pair {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 {% endblock %}
@@ -164,14 +159,14 @@
 <div class="admin-page">
   <div class="welcome-section">
     <div class="welcome-card">
-      <h1>Metricas del Sistema</h1>
-      <p>Graficas y tendencias del panel administrativo con animacion al cargar.</p>
+      <h1>Métricas del Sistema</h1>
+      <p>Gráficas y tendencias del panel administrativo con animación al cargar.</p>
     </div>
   </div>
 
   <div class="metrics-grid">
     <div class="metric-card">
-      <h3>Distribucion de Usuarios</h3>
+      <h3>Distribución de Usuarios</h3>
       <div class="metric-row">
         <div class="metric-head"><span>Estudiantes</span><strong>{{ estudiantes_count }}</strong></div>
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(user_est_pct) }}"></div></div>
@@ -187,7 +182,7 @@
     </div>
 
     <div class="metric-card">
-      <h3>Asignacion Docente</h3>
+      <h3>Asignación Docente</h3>
       <div class="donut-wrap">
         <div class="donut js-donut" data-target="{{ '%.2f'|format(est_asig_pct) }}">
           <div class="donut-value js-donut-value">0%</div>
@@ -223,15 +218,15 @@
     <div class="metric-card">
       <h3>Aptitudes (Promedio)</h3>
       <div class="metric-row">
-        <div class="metric-head"><span>Razonamiento logico</span><strong>{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</strong></div>
+        <div class="metric-head"><span>Razonamiento lógico</span><strong>{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</strong></div>
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.logical_reasoning_score if score_averages.logical_reasoning_score is not none else 0 }}"></div></div>
       </div>
       <div class="metric-row">
-        <div class="metric-head"><span>Resolucion de problemas</span><strong>{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</strong></div>
+        <div class="metric-head"><span>Resolución de problemas</span><strong>{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</strong></div>
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.problem_resolution_score if score_averages.problem_resolution_score is not none else 0 }}"></div></div>
       </div>
       <div class="metric-row">
-        <div class="metric-head"><span>Atencion al detalle</span><strong>{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</strong></div>
+        <div class="metric-head"><span>Atención al detalle</span><strong>{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</strong></div>
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.detail_attention_score if score_averages.detail_attention_score is not none else 0 }}"></div></div>
       </div>
       <div class="metric-row">
@@ -239,45 +234,43 @@
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.creativity_score if score_averages.creativity_score is not none else 0 }}"></div></div>
       </div>
       <div class="metric-row">
-        <div class="metric-head"><span>Habilidad tecnica</span><strong>{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</strong></div>
+        <div class="metric-head"><span>Habilidad técnica</span><strong>{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</strong></div>
         <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.tech_ability_score if score_averages.tech_ability_score is not none else 0 }}"></div></div>
       </div>
     </div>
 
-    <div class="metric-card">
-      <h3>Tendencia de evaluaciones (6 meses)</h3>
-      <div class="line-chart-wrap">
-        <svg class="line-svg" viewBox="0 0 560 180" preserveAspectRatio="none" aria-label="Tendencia de evaluaciones">
-          <polyline id="eval-trend-line" fill="none" stroke="#2563eb" stroke-width="3" points=""></polyline>
-          <polyline id="eval-trend-area" fill="rgba(37,99,235,0.16)" stroke="none" points=""></polyline>
-        </svg>
-        <div class="line-axis">
-          {% for label in eval_trend_labels %}
-            <span>{{ label }}</span>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-
-    <div class="metric-card">
-      <h3>Eventos de auditoría más comunes</h3>
-      {% if top_audit_actions %}
-        {% set audit_max = (top_audit_actions[0].count if top_audit_actions[0].count > 0 else 1) %}
-        {% for item in top_audit_actions %}
-          {% set audit_pct = (item.count / audit_max * 100) %}
-          <div class="audit-bar-row">
-            <div class="audit-bar-head">
-              <span>{{ item.action }}</span>
-              <strong>{{ item.count }}</strong>
-            </div>
-            <div class="audit-bar-track">
-              <div class="audit-bar-fill js-audit-fill" data-target="{{ '%.2f'|format(audit_pct) }}"></div>
+    <div class="metric-card metric-card-wide">
+      <div class="chart-pair">
+        <div>
+          <h3>Tendencia de evaluaciones (6 meses)</h3>
+          <div class="line-chart-wrap">
+            <svg class="line-svg" viewBox="0 0 560 190" preserveAspectRatio="none" aria-label="Tendencia de evaluaciones">
+              <polyline id="eval-trend-line" fill="none" stroke="#2563eb" stroke-width="3" points=""></polyline>
+              <polyline id="eval-trend-area" fill="rgba(37,99,235,0.16)" stroke="none" points=""></polyline>
+            </svg>
+            <div class="line-axis">
+              {% for label in eval_trend_labels %}
+                <span>{{ label }}</span>
+              {% endfor %}
             </div>
           </div>
-        {% endfor %}
-      {% else %}
-        <p class="empty-state">Aún no hay datos suficientes de auditoría para graficar.</p>
-      {% endif %}
+        </div>
+
+        <div>
+          <h3>Tendencia de auditoría (6 meses)</h3>
+          <div class="line-chart-wrap">
+            <svg class="line-svg" viewBox="0 0 560 190" preserveAspectRatio="none" aria-label="Tendencia de auditoría">
+              <polyline id="audit-trend-line" fill="none" stroke="#22c55e" stroke-width="3" points=""></polyline>
+              <polyline id="audit-trend-area" fill="rgba(34,197,94,0.15)" stroke="none" points=""></polyline>
+            </svg>
+            <div class="line-axis">
+              {% for label in audit_trend_labels %}
+                <span>{{ label }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -287,13 +280,8 @@
 <script>
   (function () {
     const fills = Array.from(document.querySelectorAll('.js-fill'));
-    const auditFills = Array.from(document.querySelectorAll('.js-audit-fill'));
     window.requestAnimationFrame(function () {
       fills.forEach((fill) => {
-        const target = Math.max(0, Math.min(100, Number(fill.dataset.target || '0')));
-        fill.style.width = target.toFixed(2) + '%';
-      });
-      auditFills.forEach((fill) => {
         const target = Math.max(0, Math.min(100, Number(fill.dataset.target || '0')));
         fill.style.width = target.toFixed(2) + '%';
       });
@@ -318,32 +306,36 @@
       window.requestAnimationFrame(render);
     }
 
-    const trendValues = {{ eval_trend_values | tojson }};
-    const line = document.getElementById('eval-trend-line');
-    const area = document.getElementById('eval-trend-area');
-    if (!line || !area || !Array.isArray(trendValues) || !trendValues.length) return;
+    const drawTrend = (values, lineId, areaId) => {
+      const line = document.getElementById(lineId);
+      const area = document.getElementById(areaId);
+      if (!line || !area || !Array.isArray(values) || !values.length) return;
 
-    const width = 560;
-    const height = 180;
-    const padding = 18;
-    const maxValue = Math.max(1, ...trendValues);
-    const step = trendValues.length > 1 ? (width - padding * 2) / (trendValues.length - 1) : 0;
-    const points = trendValues.map((value, index) => {
-      const x = padding + step * index;
-      const y = height - padding - ((Number(value || 0) / maxValue) * (height - padding * 2));
-      return [x, y];
-    });
+      const width = 560;
+      const height = 190;
+      const padding = 18;
+      const maxValue = Math.max(1, ...values);
+      const step = values.length > 1 ? (width - padding * 2) / (values.length - 1) : 0;
+      const points = values.map((value, index) => {
+        const x = padding + step * index;
+        const y = height - padding - ((Number(value || 0) / maxValue) * (height - padding * 2));
+        return [x, y];
+      });
 
-    const linePoints = points.map(([x, y]) => `${x},${y}`).join(' ');
-    const areaPoints = `${padding},${height - padding} ${linePoints} ${padding + step * (trendValues.length - 1)},${height - padding}`;
-    line.setAttribute('points', linePoints);
-    area.setAttribute('points', areaPoints);
-    line.style.strokeDasharray = `${line.getTotalLength()}`;
-    line.style.strokeDashoffset = `${line.getTotalLength()}`;
-    line.style.transition = 'stroke-dashoffset 1.1s ease';
-    requestAnimationFrame(() => {
-      line.style.strokeDashoffset = '0';
-    });
+      const linePoints = points.map(([x, y]) => `${x},${y}`).join(' ');
+      const areaPoints = `${padding},${height - padding} ${linePoints} ${padding + step * (values.length - 1)},${height - padding}`;
+      line.setAttribute('points', linePoints);
+      area.setAttribute('points', areaPoints);
+      line.style.strokeDasharray = `${line.getTotalLength()}`;
+      line.style.strokeDashoffset = `${line.getTotalLength()}`;
+      line.style.transition = 'stroke-dashoffset 1.1s ease';
+      requestAnimationFrame(() => {
+        line.style.strokeDashoffset = '0';
+      });
+    };
+
+    drawTrend({{ eval_trend_values | tojson }}, 'eval-trend-line', 'eval-trend-area');
+    drawTrend({{ audit_trend_values | tojson }}, 'audit-trend-line', 'audit-trend-area');
   })();
 </script>
 {% endblock %}

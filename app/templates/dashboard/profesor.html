@@ -36,14 +36,30 @@
     display: block;
   }
 
-  .teacher-grade-grid {
+  .teacher-grade-form {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+  }
+
+  .teacher-grade-student {
+    max-width: 580px;
+  }
+
+  .teacher-grade-layout {
+    display: grid;
+    grid-template-columns: minmax(230px, 1fr) minmax(330px, 1.2fr) auto;
+    gap: 10px;
+    align-items: start;
+  }
+
+  .teacher-grade-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
     gap: 10px;
   }
 
   .teacher-grade-note {
-    min-height: 100px;
+    min-height: 110px;
     width: 100%;
     resize: vertical;
     border-radius: 8px;
@@ -53,6 +69,32 @@
     padding: 10px 12px;
     font-size: 13px;
     font-family: inherit;
+  }
+
+  .teacher-grade-submit {
+    align-self: center;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1080px) {
+    .teacher-grade-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .teacher-grade-fields {
+      grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+
+    .teacher-grade-submit {
+      align-self: stretch;
+      justify-self: start;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .teacher-grade-fields {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 {% endblock %}
@@ -164,6 +206,7 @@
             <tr>
               <th>Nombre</th>
               <th>Email</th>
+              <th>RNE</th>
               <th>Sección</th>
               <th>Cuenta</th>
               <th>Comentario</th>
@@ -175,13 +218,19 @@
             {% for est in estudiantes %}
               {% set seccion_tag = (est.seccion or 'sin-seccion') | lower %}
               <tr
-                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ (student_email_display.get(est.id, '') or '') ~ ' ' ~ (est.seccion or '') ~ ' ' ~ (est.student_profile.student_id if est.student_profile else '')) | lower }}"
+                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ (student_email_display.get(est.id, '') or '') ~ ' ' ~ (est.seccion or '') ~ ' ' ~ (student_rne_display.get(est.id, '') or '')) | lower }}"
                 data-seccion="{{ seccion_tag }}"
               >
                 <td>{{ est.nombre }} {{ est.apellido }}</td>
                 <td>
                   {{ student_email_display.get(est.id, '-') }}
                   {% if not allow_professor_view_student_email %}
+                    <span class="text-muted text-small">(oculto)</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ student_rne_display.get(est.id, '-') }}
+                  {% if not allow_professor_view_student_rne %}
                     <span class="text-muted text-small">(oculto)</span>
                   {% endif %}
                 </td>
@@ -221,64 +270,67 @@
     <p class="text-small">Las notas se envían como solicitud y el administrador decide si aprueba o rechaza.</p>
 
     {% if estudiantes %}
-      <form method="POST" action="{{ url_for('profesor.solicitar_calificacion_panel') }}" class="table-form">
+      <form method="POST" action="{{ url_for('profesor.solicitar_calificacion_panel') }}" class="teacher-grade-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <div class="teacher-grade-grid">
-          <div>
-            <label for="estudiante_id">Estudiante</label>
-            <select id="estudiante_id" name="estudiante_id" class="table-select" required>
-              <option value="">Selecciona</option>
-              {% for est in estudiantes %}
-                <option value="{{ est.id }}">
-                  {{ est.nombre }} {{ est.apellido }}{% if est.student_profile %} - {{ est.student_profile.student_id }}{% endif %}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
 
-          <div>
-            <label for="asignatura">Asignatura</label>
-            <select id="asignatura" name="asignatura" class="table-select" required>
-              <option value="">Selecciona</option>
-              {% for materia in asignaturas_calificacion %}
-                <option value="{{ materia }}">{{ materia }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div>
-            <label for="periodo">Período</label>
-            <select id="periodo" name="periodo" class="table-select">
-              <option value="">Sin período</option>
-              {% for value, label in periodos_calificacion %}
-                <option value="{{ value }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div>
-            <label for="anio">Año</label>
-            <select id="anio" name="anio" class="table-select">
-              <option value="">Sin año</option>
-              {% for year in year_options %}
-                <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div>
-            <label for="valor">Calificación</label>
-            <input id="valor" name="valor" type="number" min="0" max="100" step="0.01" class="table-select" placeholder="89.5" required>
-          </div>
+        <div class="teacher-grade-student">
+          <label for="estudiante_id">Estudiante</label>
+          <select id="estudiante_id" name="estudiante_id" class="table-select" required>
+            <option value="">Selecciona</option>
+            {% for est in estudiantes %}
+              <option value="{{ est.id }}">
+                {{ est.nombre }} {{ est.apellido }} - {{ student_rne_display.get(est.id, 'Sin RNE') }}
+              </option>
+            {% endfor %}
+          </select>
         </div>
 
-        <div style="margin-top: 10px;">
-          <label for="observaciones">Contexto de la nota</label>
-          <textarea id="observaciones" name="observaciones" class="teacher-grade-note" placeholder="Detalle del criterio, observación académica o justificación de la solicitud."></textarea>
-        </div>
+        <div class="teacher-grade-layout">
+          <div class="teacher-grade-fields">
+            <div>
+              <label for="asignatura">Asignatura</label>
+              <select id="asignatura" name="asignatura" class="table-select" required>
+                <option value="">Selecciona</option>
+                {% for materia in asignaturas_calificacion %}
+                  <option value="{{ materia }}">{{ materia }}</option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div class="section-actions" style="margin-top: 10px;">
-          <button type="submit" class="btn btn-primary btn-sm">Enviar solicitud de calificación</button>
+            <div>
+              <label for="periodo">Período</label>
+              <select id="periodo" name="periodo" class="table-select">
+                <option value="">Sin período</option>
+                {% for value, label in periodos_calificacion %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label for="anio">Año</label>
+              <select id="anio" name="anio" class="table-select">
+                <option value="">Sin año</option>
+                {% for year in year_options %}
+                  <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <label for="valor">Calificación</label>
+              <input id="valor" name="valor" type="number" min="0" max="100" step="0.01" class="table-select" placeholder="89.5" required>
+            </div>
+          </div>
+
+          <div>
+            <label for="observaciones">Contexto de la nota</label>
+            <textarea id="observaciones" name="observaciones" class="teacher-grade-note" placeholder="Detalle del criterio, observación académica o justificación de la solicitud."></textarea>
+          </div>
+
+          <div class="teacher-grade-submit">
+            <button type="submit" class="btn btn-primary btn-sm">Enviar solicitud de calificación</button>
+          </div>
         </div>
       </form>
 
@@ -288,8 +340,8 @@
           <table>
             <thead>
               <tr>
-                <th>ID</th>
                 <th>Estudiante</th>
+                <th>RNE</th>
                 <th>Asignatura</th>
                 <th>Período</th>
                 <th>Año</th>
@@ -300,12 +352,18 @@
             <tbody>
               {% for req in pending_grade_requests %}
                 <tr>
-                  <td>#{{ req.id }}</td>
                   <td>
                     {% if req.estudiante %}
                       {{ req.estudiante.nombre }} {{ req.estudiante.apellido }}
                     {% else %}
                       Estudiante no disponible
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if req.estudiante %}
+                      {{ student_rne_display.get(req.estudiante.id, '-') }}
+                    {% else %}
+                      -
                     {% endif %}
                   </td>
                   <td>{{ req.asignatura }}</td>

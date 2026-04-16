@@ -211,8 +211,11 @@ def _build_external_url(endpoint: str, **kwargs) -> str:
     base = (
         current_app.config.get("PUBLIC_BASE_URL")
         or current_app.config.get("APP_BASE_URL")
-        or ""
-    ).rstrip("/")
+        or "https://edtechai.lat"
+    ).strip()
+    if "onrender.com" in base.lower():
+        base = "https://edtechai.lat"
+    base = base.rstrip("/")
     relative = url_for(endpoint, **kwargs)
     if base:
         return f"{base}{relative}"

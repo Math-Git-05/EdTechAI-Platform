@@ -91,6 +91,7 @@ ASIGNATURAS_PREDEFINIDAS = [
 ]
 
 SETTING_ALLOW_PROF_EMAIL = "allow_professor_view_student_email"
+SETTING_ALLOW_PROF_RNE = "allow_professor_view_student_rne"
 SETTING_ALLOW_ADMIN_CSV = "allow_admin_export_csv"
 SETTING_ALLOW_PROF_CSV = "allow_professor_export_csv"
 SETTING_DEMO_MODE = "demo_mode_enabled"
@@ -782,23 +783,6 @@ def _dashboard_context():
     for solicitud in solicitudes_perfil:
         solicitud.parsed_payload = _load_request_payload(solicitud)
 
-    top_audit_actions = []
-    try:
-        top_audit_actions_raw = (
-            db.session.query(AuditLog.action, func.count(AuditLog.id).label("total"))
-            .group_by(AuditLog.action)
-            .order_by(func.count(AuditLog.id).desc())
-            .limit(6)
-            .all()
-        )
-        top_audit_actions = [
-            {"action": str(row[0] or "unknown"), "count": int(row[1] or 0)}
-            for row in top_audit_actions_raw
-        ]
-    except Exception:
-        db.session.rollback()
-        top_audit_actions = []
-
     today = datetime.utcnow().date()
     first_day_current_month = today.replace(day=1)
     month_starts: list[date] = []
@@ -808,6 +792,7 @@ def _dashboard_context():
         cursor = (cursor - timedelta(days=1)).replace(day=1)
     month_starts.reverse()
     month_counts: dict[str, int] = {item.strftime("%Y-%m"): 0 for item in month_starts}
+    audit_month_counts: dict[str, int] = {item.strftime("%Y-%m"): 0 for item in month_starts}
     earliest_dt = datetime.combine(month_starts[0], datetime.min.time())
     evaluaciones_fecha = (
         Evaluacion.query.with_entities(Evaluacion.fecha_creacion)
@@ -821,8 +806,27 @@ def _dashboard_context():
         key = fecha.strftime("%Y-%m")
         if key in month_counts:
             month_counts[key] += 1
+
+    try:
+        audit_rows = (
+            AuditLog.query.with_entities(AuditLog.created_at)
+            .filter(AuditLog.created_at.isnot(None), AuditLog.created_at >= earliest_dt)
+            .all()
+        )
+        for row in audit_rows:
+            fecha = row[0]
+            if not fecha:
+                continue
+            key = fecha.strftime("%Y-%m")
+            if key in audit_month_counts:
+                audit_month_counts[key] += 1
+    except Exception:
+        db.session.rollback()
+        audit_month_counts = {item.strftime("%Y-%m"): 0 for item in month_starts}
+
     trend_labels = [item.strftime("%b %Y") for item in month_starts]
     trend_values = [month_counts[item.strftime("%Y-%m")] for item in month_starts]
+    audit_trend_values = [audit_month_counts[item.strftime("%Y-%m")] for item in month_starts]
 
     return {
         "total_users": total_users,
@@ -853,7 +857,8 @@ def _dashboard_context():
         "solicitudes_calificacion_count": len(solicitudes_calificacion),
         "eval_trend_labels": trend_labels,
         "eval_trend_values": trend_values,
-        "top_audit_actions": top_audit_actions,
+        "audit_trend_labels": trend_labels,
+        "audit_trend_values": audit_trend_values,
         "submissions_sheet_url": current_app.config.get("TALLY_SUBMISSIONS_SHEET_URL"),
     }
 
@@ -923,6 +928,7 @@ def specialty_controls():
 
     if request.method == "POST":
         allow_email_view = _bool_from_form("allow_professor_view_student_email", default=False)
+        allow_rne_view = _bool_from_form("allow_professor_view_student_rne", default=True)
         allow_admin_csv = _bool_from_form("allow_admin_export_csv", default=True)
         allow_prof_csv = _bool_from_form("allow_professor_export_csv", default=False)
         demo_mode_enabled = _bool_from_form("demo_mode_enabled", default=False)
@@ -930,7 +936,7 @@ def specialty_controls():
         audit_logs_enabled = _bool_from_form("enable_audit_logs", default=True)
         audit_visible_limit = _safe_visible_limit(request.form.get("audit_log_visible_limit"), default=25)
         eval_window_enabled = _bool_from_form("evaluation_window_enabled", default=False)
-        maintenance_eta_text = (request.form.get("maintenance_eta_text") or "").strip() or None
+        maintenance_eta_datetime = _normalize_datetime_local(request.form.get("maintenance_eta_datetime"))
 
         eval_window_start = _normalize_datetime_local(request.form.get("evaluation_window_start"))
         eval_window_end = _normalize_datetime_local(request.form.get("evaluation_window_end"))
@@ -939,6 +945,7 @@ def specialty_controls():
             return redirect(url_for("admin.specialty_controls"))
 
         set_bool_setting(SETTING_ALLOW_PROF_EMAIL, allow_email_view)
+        set_bool_setting(SETTING_ALLOW_PROF_RNE, allow_rne_view)
         set_bool_setting(SETTING_ALLOW_ADMIN_CSV, allow_admin_csv)
         set_bool_setting(SETTING_ALLOW_PROF_CSV, allow_prof_csv)
         set_bool_setting(SETTING_DEMO_MODE, demo_mode_enabled)
@@ -948,7 +955,7 @@ def specialty_controls():
         set_bool_setting(SETTING_EVAL_WINDOW_ENABLED, eval_window_enabled)
         set_setting(SETTING_EVAL_WINDOW_START, eval_window_start)
         set_setting(SETTING_EVAL_WINDOW_END, eval_window_end)
-        set_setting(SETTING_MAINTENANCE_ETA, maintenance_eta_text)
+        set_setting(SETTING_MAINTENANCE_ETA, maintenance_eta_datetime)
         db.session.commit()
 
         log_audit_event(
@@ -958,6 +965,7 @@ def specialty_controls():
             target_id="specialty_controls",
             metadata={
                 "allow_professor_view_student_email": allow_email_view,
+                "allow_professor_view_student_rne": allow_rne_view,
                 "allow_admin_export_csv": allow_admin_csv,
                 "allow_professor_export_csv": allow_prof_csv,
                 "demo_mode_enabled": demo_mode_enabled,
@@ -967,7 +975,7 @@ def specialty_controls():
                 "evaluation_window_enabled": eval_window_enabled,
                 "evaluation_window_start": eval_window_start,
                 "evaluation_window_end": eval_window_end,
-                "maintenance_eta_text": maintenance_eta_text,
+                "maintenance_eta_datetime": maintenance_eta_datetime,
             },
         )
         db.session.commit()
@@ -975,6 +983,7 @@ def specialty_controls():
         return redirect(url_for("admin.specialty_controls"))
 
     allow_email_view = get_bool_setting(SETTING_ALLOW_PROF_EMAIL, default=False)
+    allow_rne_view = get_bool_setting(SETTING_ALLOW_PROF_RNE, default=True)
     allow_admin_csv = get_bool_setting(SETTING_ALLOW_ADMIN_CSV, default=True)
     allow_prof_csv = get_bool_setting(SETTING_ALLOW_PROF_CSV, default=False)
     demo_mode_enabled = get_bool_setting(SETTING_DEMO_MODE, default=False)
@@ -984,7 +993,7 @@ def specialty_controls():
     eval_window_enabled = get_bool_setting(SETTING_EVAL_WINDOW_ENABLED, default=False)
     eval_window_start = (get_setting(SETTING_EVAL_WINDOW_START, "") or "").strip()
     eval_window_end = (get_setting(SETTING_EVAL_WINDOW_END, "") or "").strip()
-    maintenance_eta_text = (get_setting(SETTING_MAINTENANCE_ETA, "") or "").strip()
+    maintenance_eta_datetime = (get_setting(SETTING_MAINTENANCE_ETA, "") or "").strip()
     window_snapshot = _evaluation_window_snapshot()
     audit_recent = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(audit_visible_limit).all()
 
@@ -992,6 +1001,7 @@ def specialty_controls():
         "dashboard/admin_specialty_controls.html",
         admin_active="specialty_controls",
         allow_professor_view_student_email=allow_email_view,
+        allow_professor_view_student_rne=allow_rne_view,
         allow_admin_export_csv=allow_admin_csv,
         allow_professor_export_csv=allow_prof_csv,
         demo_mode_enabled=demo_mode_enabled,
@@ -1001,7 +1011,7 @@ def specialty_controls():
         evaluation_window_enabled=eval_window_enabled,
         evaluation_window_start=eval_window_start,
         evaluation_window_end=eval_window_end,
-        maintenance_eta_text=maintenance_eta_text,
+        maintenance_eta_datetime=maintenance_eta_datetime,
         evaluation_window_status=window_snapshot,
         audit_recent=audit_recent,
         **_dashboard_context(),

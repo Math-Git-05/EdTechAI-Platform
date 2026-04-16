@@ -56,6 +56,15 @@ def _mask_email(email: str | None) -> str:
     return f"{local_masked}@{domain}"
 
 
+def _mask_identifier(value: str | None) -> str:
+    token = (value or "").strip()
+    if not token:
+        return "-"
+    if len(token) <= 4:
+        return "***"
+    return f"{token[:2]}***{token[-2:]}"
+
+
 def _csv_response(*, filename: str, fieldnames: list[str], rows: list[dict[str, object]]) -> Response:
     buffer = StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
@@ -191,6 +200,7 @@ def index():
         .all()
     )
     allow_email_view = get_bool_setting("allow_professor_view_student_email", default=False)
+    allow_rne_view = get_bool_setting("allow_professor_view_student_rne", default=True)
     allow_professor_export_csv = get_bool_setting("allow_professor_export_csv", default=False)
     pending_grade_requests = (
         GradeChangeRequest.query.filter_by(profesor_id=current_user.id, status="pendiente")
@@ -199,8 +209,11 @@ def index():
         .all()
     )
     student_email_display: dict[int, str] = {}
+    student_rne_display: dict[int, str] = {}
     for est in estudiantes:
         student_email_display[est.id] = est.email if allow_email_view else _mask_email(est.email)
+        student_rne = est.student_profile.student_id if est.student_profile else ""
+        student_rne_display[est.id] = student_rne if (allow_rne_view and student_rne) else _mask_identifier(student_rne)
 
     secciones_disponibles = sorted(
         {
@@ -276,7 +289,9 @@ def index():
         "dashboard/profesor.html",
         estudiantes=estudiantes,
         student_email_display=student_email_display,
+        student_rne_display=student_rne_display,
         allow_professor_view_student_email=allow_email_view,
+        allow_professor_view_student_rne=allow_rne_view,
         secciones_disponibles=secciones_disponibles,
         evaluaciones_total=evaluaciones_total,
         score_averages=score_averages,
@@ -517,7 +532,10 @@ def comentarios_estudiante(estudiante_id):
         return redirect(url_for("profesor.index"))
 
     allow_email_view = get_bool_setting("allow_professor_view_student_email", default=False)
+    allow_rne_view = get_bool_setting("allow_professor_view_student_rne", default=True)
     student_email_text = estudiante.email if allow_email_view else _mask_email(estudiante.email)
+    student_rne_raw = estudiante.student_profile.student_id if estudiante.student_profile else ""
+    student_rne_text = student_rne_raw if (allow_rne_view and student_rne_raw) else _mask_identifier(student_rne_raw)
 
     if request.method == "POST":
         comentario = (request.form.get("comentario") or "").strip()
@@ -637,6 +655,8 @@ def comentarios_estudiante(estudiante_id):
         "dashboard/profesor_comentarios.html",
         estudiante=estudiante,
         student_email_text=student_email_text,
+        student_rne_text=student_rne_text,
+        allow_professor_view_student_rne=allow_rne_view,
         evaluaciones=evaluaciones,
         pending_edit_request=pending_edit_request,
         approved_edit_request=approved_edit_request,

@@ -99,6 +99,12 @@
     <div class="welcome-card">
       <h1>Comentarios de Evaluacion</h1>
       <p>{{ estudiante.nombre }} {{ estudiante.apellido }} ({{ student_email_text }})</p>
+      <p class="welcome-subtitle">
+        RNE: {{ student_rne_text }}
+        {% if not allow_professor_view_student_rne %}
+          (oculto)
+        {% endif %}
+      </p>
       <p class="welcome-subtitle">Seccion: {{ estudiante.seccion or 'Sin seccion' }}</p>
     </div>
   </div>

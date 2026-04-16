@@ -5,21 +5,38 @@
 <style>
   .sc-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    grid-template-columns: repeat(2, minmax(320px, 1fr));
     gap: 14px;
     margin-bottom: 14px;
   }
 
   .sc-card {
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: 14px;
     background: linear-gradient(180deg, rgba(37,99,235,0.10), rgba(37,99,235,0.03));
     padding: 14px;
   }
 
   .sc-card h3 {
-    margin: 0 0 6px 0;
+    margin: 0 0 8px 0;
     font-size: 15px;
+  }
+
+  .sc-card p {
+    margin: 0 0 10px 0;
+  }
+
+  .sc-card-bottom {
+    grid-column: 1 / -1;
+    width: 100%;
+    max-width: 860px;
+    justify-self: center;
+  }
+
+  .sc-save-row {
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
   }
 
   .sc-actions {
@@ -42,6 +59,26 @@
   .sc-btn:hover {
     filter: brightness(1.05);
   }
+
+  .sc-field {
+    margin-bottom: 8px;
+  }
+
+  .sc-field:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 980px) {
+    .sc-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .sc-card-bottom {
+      grid-column: auto;
+      max-width: none;
+      justify-self: stretch;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -62,21 +99,33 @@
       <div class="sc-grid">
         <div class="sc-card">
           <h3>Privacidad y Exportación</h3>
-          <div>
+          <p class="text-small">Controla qué datos sensibles pueden ver los profesores y quién exporta CSV.</p>
+
+          <div class="sc-field">
             <label for="allow_professor_view_student_email">Visibilidad de correo para profesor</label>
             <select id="allow_professor_view_student_email" name="allow_professor_view_student_email" class="table-select">
               <option value="0" {% if not allow_professor_view_student_email %}selected{% endif %}>Ocultar correo (Recomendado)</option>
               <option value="1" {% if allow_professor_view_student_email %}selected{% endif %}>Mostrar correo completo</option>
             </select>
           </div>
-          <div>
+
+          <div class="sc-field">
+            <label for="allow_professor_view_student_rne">Visibilidad de RNE para profesor</label>
+            <select id="allow_professor_view_student_rne" name="allow_professor_view_student_rne" class="table-select">
+              <option value="1" {% if allow_professor_view_student_rne %}selected{% endif %}>Mostrar RNE</option>
+              <option value="0" {% if not allow_professor_view_student_rne %}selected{% endif %}>Ocultar/Enmascarar RNE</option>
+            </select>
+          </div>
+
+          <div class="sc-field">
             <label for="allow_admin_export_csv">Exportación CSV para admin</label>
             <select id="allow_admin_export_csv" name="allow_admin_export_csv" class="table-select">
               <option value="1" {% if allow_admin_export_csv %}selected{% endif %}>Habilitada</option>
               <option value="0" {% if not allow_admin_export_csv %}selected{% endif %}>Bloqueada</option>
             </select>
           </div>
-          <div>
+
+          <div class="sc-field">
             <label for="allow_professor_export_csv">Exportación CSV para profesor</label>
             <select id="allow_professor_export_csv" name="allow_professor_export_csv" class="table-select">
               <option value="0" {% if not allow_professor_export_csv %}selected{% endif %}>Bloqueada (Recomendado)</option>
@@ -87,32 +136,33 @@
 
         <div class="sc-card">
           <h3>Modos y Auditoría</h3>
-          <div>
+          <p class="text-small">Activa modo mantenimiento/demo y controla el tamaño visible del log.</p>
+
+          <div class="sc-field">
             <label for="maintenance_mode_enabled">Maintenance Mode</label>
             <select id="maintenance_mode_enabled" name="maintenance_mode_enabled" class="table-select">
               <option value="0" {% if not maintenance_mode_enabled %}selected{% endif %}>Desactivado</option>
               <option value="1" {% if maintenance_mode_enabled %}selected{% endif %}>Activado (solo admin entra)</option>
             </select>
           </div>
-          <div>
-            <label for="maintenance_eta_text">ETA mantenimiento (visible a usuarios)</label>
-            <input id="maintenance_eta_text" name="maintenance_eta_text" class="table-select" placeholder="Ej: 16 de abril, 20:30" value="{{ maintenance_eta_text }}">
-          </div>
-          <div>
+
+          <div class="sc-field">
             <label for="demo_mode_enabled">Demo Mode</label>
             <select id="demo_mode_enabled" name="demo_mode_enabled" class="table-select">
               <option value="0" {% if not demo_mode_enabled %}selected{% endif %}>Desactivado</option>
               <option value="1" {% if demo_mode_enabled %}selected{% endif %}>Activado (solo lectura para no admin)</option>
             </select>
           </div>
-          <div>
+
+          <div class="sc-field">
             <label for="enable_audit_logs">Enable audit logs</label>
             <select id="enable_audit_logs" name="enable_audit_logs" class="table-select">
               <option value="1" {% if enable_audit_logs %}selected{% endif %}>Activado</option>
               <option value="0" {% if not enable_audit_logs %}selected{% endif %}>Desactivado</option>
             </select>
           </div>
-          <div>
+
+          <div class="sc-field">
             <label for="audit_log_visible_limit">Límite visible de logs</label>
             <select id="audit_log_visible_limit" name="audit_log_visible_limit" class="table-select">
               {% for value in [25, 30, 50, 100, 200] %}
@@ -122,23 +172,33 @@
           </div>
         </div>
 
-        <div class="sc-card">
-          <h3>Ventana de Evaluación</h3>
-          <div>
+        <div class="sc-card sc-card-bottom">
+          <h3>Ventana de Evaluación y ETA</h3>
+          <p class="text-small">Configura fechas de apertura/cierre y una fecha estimada de reapertura para mantenimiento.</p>
+
+          <div class="sc-field">
             <label for="evaluation_window_enabled">Control por fechas</label>
             <select id="evaluation_window_enabled" name="evaluation_window_enabled" class="table-select">
               <option value="0" {% if not evaluation_window_enabled %}selected{% endif %}>Sin ventana (siempre abierta)</option>
               <option value="1" {% if evaluation_window_enabled %}selected{% endif %}>Activada por fecha</option>
             </select>
           </div>
-          <div>
+
+          <div class="sc-field">
             <label for="evaluation_window_start">Fecha apertura</label>
             <input id="evaluation_window_start" name="evaluation_window_start" type="datetime-local" class="table-select" value="{{ evaluation_window_start }}">
           </div>
-          <div>
+
+          <div class="sc-field">
             <label for="evaluation_window_end">Fecha cierre</label>
             <input id="evaluation_window_end" name="evaluation_window_end" type="datetime-local" class="table-select" value="{{ evaluation_window_end }}">
           </div>
+
+          <div class="sc-field">
+            <label for="maintenance_eta_datetime">Fecha y hora estimada de reapertura</label>
+            <input id="maintenance_eta_datetime" name="maintenance_eta_datetime" type="datetime-local" class="table-select" value="{{ maintenance_eta_datetime }}">
+          </div>
+
           <p class="text-small" style="margin: 8px 0 0 0;">
             Estado actual:
             <strong>
@@ -160,7 +220,7 @@
         </div>
       </div>
 
-      <div class="sc-actions">
+      <div class="sc-save-row">
         <button type="submit" class="sc-btn">Guardar Specialty Controls</button>
       </div>
     </form>
