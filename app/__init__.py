@@ -1250,7 +1250,13 @@ def create_app(env: str = "default"):
             "nav_notifications_count": 0,
             "show_notification_toast": False,
         }
-        if not current_user.is_authenticated:
+        try:
+            is_authenticated = bool(current_user.is_authenticated)
+        except Exception:
+            db.session.rollback()
+            return context
+
+        if not is_authenticated:
             return context
 
         context["show_notification_toast"] = bool(session.pop("show_notification_toast", False))
@@ -1336,6 +1342,8 @@ def create_app(env: str = "default"):
                     )
                 context["nav_notifications_count"] = profile_pending
         except Exception:
+            db.session.rollback()
+            app.logger.exception("Error cargando notificaciones de navegacion")
             return context
         return context
 
@@ -1359,7 +1367,8 @@ def create_app(env: str = "default"):
             "formulario.index",
             "resultado.index",
         }
-        if current_user.is_authenticated or request.endpoint in sensitive_endpoints:
+        session_user_present = bool(session.get("_user_id"))
+        if session_user_present or request.endpoint in sensitive_endpoints:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
             response.headers["Pragma"] = "no-cache"
             response.headers["Expires"] = "0"
@@ -1373,7 +1382,12 @@ def create_app(env: str = "default"):
     def load_user(user_id):
         from .models.user import User
 
-        return User.query.get(int(user_id))
+        try:
+            return db.session.get(User, int(user_id))
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("No se pudo cargar user_id=%s desde sesion", user_id)
+            return None
 
     with app.app_context():
         # Carga modelos antes de create_all para registrar metadata completa.
