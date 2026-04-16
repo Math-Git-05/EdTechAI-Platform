@@ -1,0 +1,229 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Metricas - Admin EdTech{% endblock %}
+
+{% block admin_extra_head %}
+<style>
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .metric-card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 14px;
+  }
+
+  .metric-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 15px;
+  }
+
+  .metric-row {
+    margin-bottom: 10px;
+  }
+
+  .metric-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .metric-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .metric-fill {
+    width: 0%;
+    height: 100%;
+    border-radius: 999px;
+    transition: width 1.1s ease;
+    background: linear-gradient(90deg, #2563eb, #22c55e);
+  }
+
+  .donut-wrap {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .donut {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: conic-gradient(#2563eb 0deg, #2563eb 0deg, #e2e8f0 0deg, #e2e8f0 360deg);
+    position: relative;
+  }
+
+  .donut::after {
+    content: "";
+    position: absolute;
+    inset: 16px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .donut-value {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text1);
+    z-index: 2;
+  }
+
+  .mini-note {
+    font-size: 12px;
+    color: var(--text2);
+    margin: 0;
+  }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+{% set total_users_safe = total_users if total_users > 0 else 1 %}
+{% set user_est_pct = (estudiantes_count / total_users_safe * 100) %}
+{% set user_prof_pct = (profesores_count / total_users_safe * 100) %}
+{% set user_admin_pct = (admins_count / total_users_safe * 100) %}
+
+{% set est_total_safe = (estudiantes_count if estudiantes_count > 0 else 1) %}
+{% set est_asig_pct = (estudiantes_asignados_count / est_total_safe * 100) %}
+{% set est_sin_pct = (estudiantes_sin_asignar_count / est_total_safe * 100) %}
+
+{% set eval_total_safe = (evaluaciones_count if evaluaciones_count > 0 else 1) %}
+{% set tally_pct = (evaluaciones_tally_count / eval_total_safe * 100) %}
+
+<div class="admin-page">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Metricas del Sistema</h1>
+      <p>Graficas y tendencias del panel administrativo con animacion al cargar.</p>
+    </div>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="metric-card">
+      <h3>Distribucion de Usuarios</h3>
+      <div class="metric-row">
+        <div class="metric-head"><span>Estudiantes</span><strong>{{ estudiantes_count }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(user_est_pct) }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Profesores</span><strong>{{ profesores_count }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(user_prof_pct) }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Administradores</span><strong>{{ admins_count }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(user_admin_pct) }}"></div></div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h3>Asignacion Docente</h3>
+      <div class="donut-wrap">
+        <div class="donut js-donut" data-target="{{ '%.2f'|format(est_asig_pct) }}">
+          <div class="donut-value js-donut-value">0%</div>
+        </div>
+        <div>
+          <p class="mini-note">Asignados: <strong>{{ estudiantes_asignados_count }}</strong></p>
+          <p class="mini-note">Sin asignar: <strong>{{ estudiantes_sin_asignar_count }}</strong></p>
+          <p class="mini-note">Base estudiantes: <strong>{{ estudiantes_count }}</strong></p>
+        </div>
+      </div>
+      <div class="metric-row" style="margin-top:10px;">
+        <div class="metric-head"><span>Sin profesor</span><strong>{{ '%.1f'|format(est_sin_pct) }}%</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(est_sin_pct) }}"></div></div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h3>Estado de Evaluaciones</h3>
+      <div class="metric-row">
+        <div class="metric-head"><span>Total evaluaciones</span><strong>{{ evaluaciones_count }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="100"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Origen Tally</span><strong>{{ evaluaciones_tally_count }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ '%.2f'|format(tally_pct) }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Promedio general</span><strong>{{ '%.1f'|format(score_averages.average_score) if score_averages.average_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.average_score if score_averages.average_score is not none else 0 }}"></div></div>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <h3>Aptitudes (Promedio)</h3>
+      <div class="metric-row">
+        <div class="metric-head"><span>Razonamiento logico</span><strong>{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.logical_reasoning_score if score_averages.logical_reasoning_score is not none else 0 }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Resolucion de problemas</span><strong>{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.problem_resolution_score if score_averages.problem_resolution_score is not none else 0 }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Atencion al detalle</span><strong>{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.detail_attention_score if score_averages.detail_attention_score is not none else 0 }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Creatividad</span><strong>{{ '%.1f'|format(score_averages.creativity_score) if score_averages.creativity_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.creativity_score if score_averages.creativity_score is not none else 0 }}"></div></div>
+      </div>
+      <div class="metric-row">
+        <div class="metric-head"><span>Habilidad tecnica</span><strong>{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</strong></div>
+        <div class="metric-track"><div class="metric-fill js-fill" data-target="{{ score_averages.tech_ability_score if score_averages.tech_ability_score is not none else 0 }}"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  (function () {
+    const fills = Array.from(document.querySelectorAll('.js-fill'));
+    window.requestAnimationFrame(function () {
+      fills.forEach((fill) => {
+        const target = Math.max(0, Math.min(100, Number(fill.dataset.target || '0')));
+        fill.style.width = target.toFixed(2) + '%';
+      });
+    });
+
+    const donut = document.querySelector('.js-donut');
+    const donutValue = document.querySelector('.js-donut-value');
+    if (!donut || !donutValue) return;
+
+    const target = Math.max(0, Math.min(100, Number(donut.dataset.target || '0')));
+    const start = performance.now();
+    const durationMs = 1050;
+
+    const render = (now) => {
+      const progress = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = target * eased;
+      const deg = (value / 100) * 360;
+      donut.style.background = `conic-gradient(#2563eb 0deg, #2563eb ${deg}deg, #e2e8f0 ${deg}deg, #e2e8f0 360deg)`;
+      donutValue.textContent = value.toFixed(0) + '%';
+      if (progress < 1) window.requestAnimationFrame(render);
+    };
+    window.requestAnimationFrame(render);
+  })();
+</script>
+{% endblock %}

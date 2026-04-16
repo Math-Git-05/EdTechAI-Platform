@@ -98,9 +98,17 @@
       <span class="sidebar-icon">R</span>
       <span class="sidebar-label">Resultados</span>
     </a>
+    <a href="{{ url_for('admin.metricas') }}" class="sidebar-link {% if admin_active == 'metricas' %}active{% endif %}">
+      <span class="sidebar-icon">M</span>
+      <span class="sidebar-label">Metricas</span>
+    </a>
     <a href="{{ url_for('admin.usuarios') }}" class="sidebar-link {% if admin_active == 'usuarios' %}active{% endif %}">
       <span class="sidebar-icon">U</span>
       <span class="sidebar-label">Control usuarios</span>
+    </a>
+    <a href="{{ url_for('admin.specialty_controls') }}" class="sidebar-link {% if admin_active == 'specialty_controls' %}active{% endif %}">
+      <span class="sidebar-icon">SC</span>
+      <span class="sidebar-label">Specialty Controls</span>
     </a>
     <div class="sidebar-spacer"></div>
     <a href="{{ url_for('dashboard.index') }}" class="sidebar-link">

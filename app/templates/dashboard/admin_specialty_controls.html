@@ -1,0 +1,44 @@
+{% extends "dashboard/admin_shell.html" %}
+{% block title %}Specialty Controls - Admin EdTech{% endblock %}
+
+{% block admin_content %}
+<div class="admin-page">
+  <div class="welcome-section">
+    <div class="welcome-card">
+      <h1>Specialty Controls</h1>
+      <p>Controles avanzados para privacidad y comportamiento visual del panel.</p>
+    </div>
+  </div>
+
+  <div class="admin-section">
+    <h2>Privacidad de Correos (Profesor)</h2>
+    <p class="text-small">
+      Si esta desactivado, el profesor vera el correo del estudiante enmascarado (ej: ma***@dominio.com).
+    </p>
+    <form method="POST" class="table-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="bulk-controls" style="align-items:end;">
+        <div>
+          <label for="allow_professor_view_student_email">Visibilidad de correo para profesor</label>
+          <select id="allow_professor_view_student_email" name="allow_professor_view_student_email" class="table-select">
+            <option value="0" {% if not allow_professor_view_student_email %}selected{% endif %}>Ocultar correo (Recomendado)</option>
+            <option value="1" {% if allow_professor_view_student_email %}selected{% endif %}>Mostrar correo completo</option>
+          </select>
+        </div>
+        <div class="bulk-submit-wrap">
+          <button type="submit" class="btn btn-primary btn-sm">Guardar control</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="admin-section">
+    <h2>Sugerencias de Specialty Controls</h2>
+    <ul class="text-small" style="margin:0;padding-left:18px;line-height:1.7;">
+      <li>Bloquear descarga de listados por rol (profesor/admin).</li>
+      <li>Modo presentacion: ocultar datos sensibles en toda la UI para demostraciones.</li>
+      <li>Ventana de mantenimiento con mensaje global administrable.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

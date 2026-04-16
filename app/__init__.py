@@ -1458,6 +1458,7 @@ def create_app(env: str = "default"):
         from .models.evaluacion import Evaluacion  # noqa: F401
         from .models.form_response import FormResponse  # noqa: F401
         from .models.profile_edit_request import ProfileEditRequest  # noqa: F401
+        from .models.system_setting import SystemSetting  # noqa: F401
         from .models.student_interest import StudentInterest  # noqa: F401
         from .models.student_profile import StudentProfile  # noqa: F401
         from .models.teacher_profile import TeacherProfile  # noqa: F401

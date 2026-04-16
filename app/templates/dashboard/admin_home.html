@@ -2,6 +2,7 @@
 {% block title %}Admin Home - EdTech{% endblock %}
 
 {% block admin_content %}
+{% set pending_total = solicitudes_perfil|length + solicitudes_comentario|length + solicitudes_cuenta_verificacion_count + solicitudes_cuenta_aprobacion_count %}
 <div class="admin-page">
   <div class="welcome-section">
     <div class="welcome-card">
@@ -12,96 +13,142 @@
 
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-number">{{ total_users }}</div>
+      <div class="stat-number js-count" data-count-to="{{ total_users }}" data-decimals="0">0</div>
       <div class="stat-label">Usuarios totales</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ estudiantes_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ estudiantes_count }}" data-decimals="0">0</div>
       <div class="stat-label">Estudiantes</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ profesores_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ profesores_count }}" data-decimals="0">0</div>
       <div class="stat-label">Profesores</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ admins_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ admins_count }}" data-decimals="0">0</div>
       <div class="stat-label">Administradores</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ estudiantes_asignados_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ estudiantes_asignados_count }}" data-decimals="0">0</div>
       <div class="stat-label">Estudiantes asignados</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ evaluaciones_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ evaluaciones_count }}" data-decimals="0">0</div>
       <div class="stat-label">Evaluaciones registradas</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ evaluaciones_tally_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ evaluaciones_tally_count }}" data-decimals="0">0</div>
       <div class="stat-label">Submissions Tally</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">
-        {% if score_averages.average_score is not none %}
-          {{ '%.1f'|format(score_averages.average_score) }}
-        {% else %}
-          -
-        {% endif %}
-      </div>
+      {% if score_averages.average_score is not none %}
+        <div class="stat-number js-count" data-count-to="{{ score_averages.average_score }}" data-decimals="1">0.0</div>
+      {% else %}
+        <div class="stat-number">-</div>
+      {% endif %}
       <div class="stat-label">Promedio general</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ estudiantes_sin_asignar_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ estudiantes_sin_asignar_count }}" data-decimals="0">0</div>
       <div class="stat-label">Sin profesor asignado</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">
-        {{ solicitudes_perfil|length + solicitudes_comentario|length + solicitudes_cuenta_verificacion_count + solicitudes_cuenta_aprobacion_count }}
-      </div>
+      <div class="stat-number js-count" data-count-to="{{ pending_total }}" data-decimals="0">0</div>
       <div class="stat-label">Solicitudes pendientes</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ solicitudes_cuenta_verificacion_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ solicitudes_cuenta_verificacion_count }}" data-decimals="0">0</div>
       <div class="stat-label">Cuentas por verificar correo</div>
     </div>
     <div class="stat-card">
-      <div class="stat-number">{{ solicitudes_cuenta_aprobacion_count }}</div>
+      <div class="stat-number js-count" data-count-to="{{ solicitudes_cuenta_aprobacion_count }}" data-decimals="0">0</div>
       <div class="stat-label">Cuentas por aprobar acceso</div>
     </div>
   </div>
 
   <div class="admin-section">
-    <h2>Promedio por Sección de Aptitud</h2>
+    <h2>Promedio por Seccion de Aptitud</h2>
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-number">{{ '%.1f'|format(score_averages.logical_reasoning_score) if score_averages.logical_reasoning_score is not none else '-' }}</div>
-        <div class="stat-label">Razonamiento lógico</div>
+        {% if score_averages.logical_reasoning_score is not none %}
+          <div class="stat-number js-count" data-count-to="{{ score_averages.logical_reasoning_score }}" data-decimals="1">0.0</div>
+        {% else %}
+          <div class="stat-number">-</div>
+        {% endif %}
+        <div class="stat-label">Razonamiento logico</div>
       </div>
       <div class="stat-card">
-        <div class="stat-number">{{ '%.1f'|format(score_averages.problem_resolution_score) if score_averages.problem_resolution_score is not none else '-' }}</div>
-        <div class="stat-label">Resolución problemas</div>
+        {% if score_averages.problem_resolution_score is not none %}
+          <div class="stat-number js-count" data-count-to="{{ score_averages.problem_resolution_score }}" data-decimals="1">0.0</div>
+        {% else %}
+          <div class="stat-number">-</div>
+        {% endif %}
+        <div class="stat-label">Resolucion problemas</div>
       </div>
       <div class="stat-card">
-        <div class="stat-number">{{ '%.1f'|format(score_averages.detail_attention_score) if score_averages.detail_attention_score is not none else '-' }}</div>
-        <div class="stat-label">Atención al detalle</div>
+        {% if score_averages.detail_attention_score is not none %}
+          <div class="stat-number js-count" data-count-to="{{ score_averages.detail_attention_score }}" data-decimals="1">0.0</div>
+        {% else %}
+          <div class="stat-number">-</div>
+        {% endif %}
+        <div class="stat-label">Atencion al detalle</div>
       </div>
       <div class="stat-card">
-        <div class="stat-number">{{ '%.1f'|format(score_averages.creativity_score) if score_averages.creativity_score is not none else '-' }}</div>
+        {% if score_averages.creativity_score is not none %}
+          <div class="stat-number js-count" data-count-to="{{ score_averages.creativity_score }}" data-decimals="1">0.0</div>
+        {% else %}
+          <div class="stat-number">-</div>
+        {% endif %}
         <div class="stat-label">Creatividad</div>
       </div>
       <div class="stat-card">
-        <div class="stat-number">{{ '%.1f'|format(score_averages.tech_ability_score) if score_averages.tech_ability_score is not none else '-' }}</div>
-        <div class="stat-label">Habilidad técnica</div>
+        {% if score_averages.tech_ability_score is not none %}
+          <div class="stat-number js-count" data-count-to="{{ score_averages.tech_ability_score }}" data-decimals="1">0.0</div>
+        {% else %}
+          <div class="stat-number">-</div>
+        {% endif %}
+        <div class="stat-label">Habilidad tecnica</div>
       </div>
     </div>
   </div>
 
   <div class="admin-section">
-    <h2>Accesos Rápidos</h2>
+    <h2>Accesos Rapidos</h2>
     <div class="section-actions">
       <a href="{{ url_for('admin.solicitudes') }}" class="btn btn-primary btn-sm">Ir a Solicitudes</a>
-      <a href="{{ url_for('admin.resultados_estudiantes') }}" class="btn btn-secondary btn-sm">Ver Resultados de Estudiantes</a>
+      <a href="{{ url_for('admin.resultados_estudiantes') }}" class="btn btn-secondary btn-sm">Ver Resultados</a>
+      <a href="{{ url_for('admin.metricas') }}" class="btn btn-secondary btn-sm">Ver Metricas</a>
+      <a href="{{ url_for('admin.specialty_controls') }}" class="btn btn-secondary btn-sm">Specialty Controls</a>
       <a href="{{ url_for('admin.usuarios') }}" class="btn btn-secondary btn-sm">Control de Usuarios</a>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block admin_extra_scripts %}
+<script>
+  (function () {
+    const nodes = Array.from(document.querySelectorAll('.js-count'));
+    if (!nodes.length) return;
+
+    const durationMs = 950;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+    nodes.forEach((node) => {
+      const target = Number(node.dataset.countTo || '0');
+      if (Number.isNaN(target)) return;
+      const decimals = Math.max(0, Number(node.dataset.decimals || '0'));
+      const start = performance.now();
+
+      const draw = (now) => {
+        const progress = Math.min(1, (now - start) / durationMs);
+        const eased = easeOutCubic(progress);
+        const current = target * eased;
+        node.textContent = current.toFixed(decimals);
+        if (progress < 1) requestAnimationFrame(draw);
+      };
+      requestAnimationFrame(draw);
+    });
+  })();
+</script>
 {% endblock %}

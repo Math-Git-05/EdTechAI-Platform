@@ -141,11 +141,16 @@
             {% for est in estudiantes %}
               {% set seccion_tag = (est.seccion or 'sin-seccion') | lower %}
               <tr
-                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ est.email ~ ' ' ~ (est.seccion or '') ~ ' ' ~ (est.student_profile.student_id if est.student_profile else '')) | lower }}"
+                data-search="{{ (est.nombre ~ ' ' ~ est.apellido ~ ' ' ~ (student_email_display.get(est.id, '') or '') ~ ' ' ~ (est.seccion or '') ~ ' ' ~ (est.student_profile.student_id if est.student_profile else '')) | lower }}"
                 data-seccion="{{ seccion_tag }}"
               >
                 <td>{{ est.nombre }} {{ est.apellido }}</td>
-                <td>{{ est.email }}</td>
+                <td>
+                  {{ student_email_display.get(est.id, '-') }}
+                  {% if not allow_professor_view_student_email %}
+                    <span class="text-muted text-small">(oculto)</span>
+                  {% endif %}
+                </td>
                 <td>{{ est.seccion or '-' }}</td>
                 <td>
                   {% if est.activo %}

@@ -11,9 +11,24 @@ from app.models.profile_edit_request import ProfileEditRequest
 from app.models.teacher_profile import TeacherProfile
 from app.models.user import User
 from app.services.profile_service import DEFAULT_SCHOOL_ID, LABOR_STATUS, normalize_student_id
+from app.services.settings_service import get_bool_setting
 from app.services.teacher_observation_service import upsert_teacher_observation
 
 profesor_bp = Blueprint('profesor', __name__)
+
+
+def _mask_email(email: str | None) -> str:
+    value = (email or "").strip()
+    if "@" not in value:
+        return "***"
+    local, domain = value.split("@", 1)
+    local = local.strip()
+    domain = domain.strip()
+    if len(local) <= 2:
+        local_masked = local[:1] + "***"
+    else:
+        local_masked = local[:2] + "***"
+    return f"{local_masked}@{domain}"
 
 
 def _sync_teacher_observation_safe(*, student_id: int, teacher_id: int, comment: str, observed_at) -> bool:
@@ -43,6 +58,11 @@ def index():
         .order_by(User.nombre.asc(), User.apellido.asc())
         .all()
     )
+    allow_email_view = get_bool_setting("allow_professor_view_student_email", default=False)
+    student_email_display: dict[int, str] = {}
+    for est in estudiantes:
+        student_email_display[est.id] = est.email if allow_email_view else _mask_email(est.email)
+
     secciones_disponibles = sorted(
         {
             (est.seccion or "").strip().upper()
@@ -116,6 +136,8 @@ def index():
     return render_template(
         "dashboard/profesor.html",
         estudiantes=estudiantes,
+        student_email_display=student_email_display,
+        allow_professor_view_student_email=allow_email_view,
         secciones_disponibles=secciones_disponibles,
         evaluaciones_total=evaluaciones_total,
         score_averages=score_averages,
@@ -226,6 +248,9 @@ def comentarios_estudiante(estudiante_id):
         flash("No puedes comentar evaluaciones de ese estudiante.", "warning")
         return redirect(url_for("profesor.index"))
 
+    allow_email_view = get_bool_setting("allow_professor_view_student_email", default=False)
+    student_email_text = estudiante.email if allow_email_view else _mask_email(estudiante.email)
+
     if request.method == "POST":
         comentario = (request.form.get("comentario") or "").strip()
         evaluacion_id_raw = (request.form.get("evaluacion_id") or "").strip().lower()
@@ -320,6 +345,7 @@ def comentarios_estudiante(estudiante_id):
     return render_template(
         "dashboard/profesor_comentarios.html",
         estudiante=estudiante,
+        student_email_text=student_email_text,
         evaluaciones=evaluaciones,
         pending_edit_request=pending_edit_request,
         approved_edit_request=approved_edit_request,

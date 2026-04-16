@@ -35,6 +35,7 @@ from app.services.academic_score_service import (
 from app.services.evaluacion_service import best_track_from_evaluacion, score_cards_from_evaluacion
 from app.services.prediction_persistence_service import upsert_ai_prediction_for_evaluacion
 from app.services.recommendation_engine_service import build_recommendation_for_student
+from app.services.settings_service import get_bool_setting, set_setting
 from app.services.student_data_sync_service import delete_student_data_if_exists, sync_student_data_if_exists
 from app.services.student_interest_service import sync_student_interest_from_profile
 from app.services.tally_service import (
@@ -103,6 +104,15 @@ def _visible_users_query():
     if root_email:
         query = query.filter(func.lower(User.email) != root_email)
     return query
+
+
+def _bool_from_form(field_name: str, default: bool = False) -> bool:
+    raw = (request.form.get(field_name) or "").strip().lower()
+    if raw in {"1", "true", "on", "yes", "si"}:
+        return True
+    if raw in {"0", "false", "off", "no"}:
+        return False
+    return bool(default)
 
 
 def _redirect_back(default_endpoint: str):
@@ -662,6 +672,45 @@ def usuarios():
     return render_template(
         "dashboard/admin_usuarios.html",
         admin_active="usuarios",
+        **_dashboard_context(),
+    )
+
+
+@admin_bp.route("/metricas")
+@login_required
+def metricas():
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+    return render_template(
+        "dashboard/admin_metricas.html",
+        admin_active="metricas",
+        **_dashboard_context(),
+    )
+
+
+@admin_bp.route("/specialty-controls", methods=["GET", "POST"])
+@login_required
+def specialty_controls():
+    if not _check_admin_access():
+        return redirect(url_for("dashboard.index"))
+
+    setting_key = "allow_professor_view_student_email"
+
+    if request.method == "POST":
+        allow_email_view = _bool_from_form("allow_professor_view_student_email", default=False)
+        set_setting(setting_key, "1" if allow_email_view else "0")
+        db.session.commit()
+        if allow_email_view:
+            flash("Specialty Control aplicado: profesor puede ver correos completos.", "success")
+        else:
+            flash("Specialty Control aplicado: correo del estudiante enmascarado para profesores.", "success")
+        return redirect(url_for("admin.specialty_controls"))
+
+    allow_email_view = get_bool_setting(setting_key, default=False)
+    return render_template(
+        "dashboard/admin_specialty_controls.html",
+        admin_active="specialty_controls",
+        allow_professor_view_student_email=allow_email_view,
         **_dashboard_context(),
     )
 
