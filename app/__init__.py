@@ -1400,15 +1400,17 @@ def create_app(env: str = "default"):
 
     @app.context_processor
     def inject_csrf_token():
-        from .services.settings_service import get_bool_setting
+        from .services.settings_service import get_bool_setting, get_setting
 
         try:
             maintenance_mode_enabled = get_bool_setting("maintenance_mode_enabled", default=False)
             demo_mode_enabled = get_bool_setting("demo_mode_enabled", default=False)
+            maintenance_eta_text = (get_setting("maintenance_eta_text", "") or "").strip()
         except Exception:
             db.session.rollback()
             maintenance_mode_enabled = False
             demo_mode_enabled = False
+            maintenance_eta_text = ""
 
         context = {
             "csrf_token": generate_csrf,
@@ -1417,6 +1419,7 @@ def create_app(env: str = "default"):
             "show_notification_toast": False,
             "maintenance_mode_enabled": maintenance_mode_enabled,
             "demo_mode_enabled": demo_mode_enabled,
+            "maintenance_eta_text": maintenance_eta_text,
         }
         try:
             is_authenticated = bool(current_user.is_authenticated)

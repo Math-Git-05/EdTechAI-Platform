@@ -35,6 +35,25 @@
   .panel-content.active {
     display: block;
   }
+
+  .teacher-grade-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+  }
+
+  .teacher-grade-note {
+    min-height: 100px;
+    width: 100%;
+    resize: vertical;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text1);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+  }
 </style>
 {% endblock %}
 
@@ -69,22 +88,23 @@
   </div>
 
   <div class="admin-section" style="margin-bottom: 14px;">
-    <h2>Accesos rapidos</h2>
+    <h2>Accesos rápidos</h2>
     <div class="section-actions">
       {% if allow_professor_export_csv %}
         <a href="{{ url_for('profesor.export_csv', dataset='estudiantes') }}" class="btn btn-secondary btn-sm">CSV estudiantes</a>
         <a href="{{ url_for('profesor.export_csv', dataset='calificaciones') }}" class="btn btn-secondary btn-sm">CSV calificaciones</a>
         <a href="{{ url_for('profesor.export_csv', dataset='evaluaciones') }}" class="btn btn-secondary btn-sm">CSV evaluaciones</a>
       {% else %}
-        <span class="text-muted text-small">Exportacion CSV bloqueada por administracion.</span>
+        <span class="text-muted text-small">Exportación CSV bloqueada por administración.</span>
       {% endif %}
-      <span class="text-muted text-small">Solicitudes de calificacion pendientes: {{ pending_grade_requests|length }}</span>
+      <span class="text-muted text-small">Solicitudes de calificación pendientes: {{ pending_grade_requests|length }}</span>
     </div>
   </div>
 
   <div class="panel-tabs" role="tablist" aria-label="Panel del profesor">
-    <button type="button" class="panel-tab active" data-target="panel-aptitudes">Promedios de Aptitudes</button>
+    <button type="button" class="panel-tab active" data-target="panel-aptitudes">Promedios de aptitudes</button>
     <button type="button" class="panel-tab" data-target="panel-estudiantes">Estudiantes</button>
+    <button type="button" class="panel-tab" data-target="panel-calificaciones">Calificaciones</button>
   </div>
 
   <div id="panel-aptitudes" class="admin-section panel-content active">
@@ -144,7 +164,7 @@
             <tr>
               <th>Nombre</th>
               <th>Email</th>
-              <th>Seccion</th>
+              <th>Sección</th>
               <th>Cuenta</th>
               <th>Comentario</th>
               <th>Historial</th>
@@ -193,6 +213,114 @@
       </div>
     {% else %}
       <p class="empty-state">Aún no tienes estudiantes asignados. Solicita al administrador realizar la asignación.</p>
+    {% endif %}
+  </div>
+
+  <div id="panel-calificaciones" class="admin-section panel-content">
+    <h2>Solicitar Calificaciones</h2>
+    <p class="text-small">Las notas se envían como solicitud y el administrador decide si aprueba o rechaza.</p>
+
+    {% if estudiantes %}
+      <form method="POST" action="{{ url_for('profesor.solicitar_calificacion_panel') }}" class="table-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="teacher-grade-grid">
+          <div>
+            <label for="estudiante_id">Estudiante</label>
+            <select id="estudiante_id" name="estudiante_id" class="table-select" required>
+              <option value="">Selecciona</option>
+              {% for est in estudiantes %}
+                <option value="{{ est.id }}">
+                  {{ est.nombre }} {{ est.apellido }}{% if est.student_profile %} - {{ est.student_profile.student_id }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="asignatura">Asignatura</label>
+            <select id="asignatura" name="asignatura" class="table-select" required>
+              <option value="">Selecciona</option>
+              {% for materia in asignaturas_calificacion %}
+                <option value="{{ materia }}">{{ materia }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="periodo">Período</label>
+            <select id="periodo" name="periodo" class="table-select">
+              <option value="">Sin período</option>
+              {% for value, label in periodos_calificacion %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="anio">Año</label>
+            <select id="anio" name="anio" class="table-select">
+              <option value="">Sin año</option>
+              {% for year in year_options %}
+                <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label for="valor">Calificación</label>
+            <input id="valor" name="valor" type="number" min="0" max="100" step="0.01" class="table-select" placeholder="89.5" required>
+          </div>
+        </div>
+
+        <div style="margin-top: 10px;">
+          <label for="observaciones">Contexto de la nota</label>
+          <textarea id="observaciones" name="observaciones" class="teacher-grade-note" placeholder="Detalle del criterio, observación académica o justificación de la solicitud."></textarea>
+        </div>
+
+        <div class="section-actions" style="margin-top: 10px;">
+          <button type="submit" class="btn btn-primary btn-sm">Enviar solicitud de calificación</button>
+        </div>
+      </form>
+
+      {% if pending_grade_requests %}
+        <h3 style="margin-top: 12px;">Pendientes recientes</h3>
+        <div class="users-table">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Estudiante</th>
+                <th>Asignatura</th>
+                <th>Período</th>
+                <th>Año</th>
+                <th>Nota</th>
+                <th>Solicitada</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for req in pending_grade_requests %}
+                <tr>
+                  <td>#{{ req.id }}</td>
+                  <td>
+                    {% if req.estudiante %}
+                      {{ req.estudiante.nombre }} {{ req.estudiante.apellido }}
+                    {% else %}
+                      Estudiante no disponible
+                    {% endif %}
+                  </td>
+                  <td>{{ req.asignatura }}</td>
+                  <td>{{ req.periodo or '-' }}</td>
+                  <td>{{ req.anio or '-' }}</td>
+                  <td>{{ '%.2f'|format(req.valor) }}</td>
+                  <td>{{ req.requested_at.strftime('%Y-%m-%d %H:%M') if req.requested_at else '-' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    {% else %}
+      <p class="empty-state">Necesitas estudiantes asignados para solicitar calificaciones.</p>
     {% endif %}
   </div>
 </div>

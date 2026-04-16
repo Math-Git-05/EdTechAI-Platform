@@ -46,6 +46,19 @@
     font-family: inherit;
   }
 
+  .grade-note-box {
+    min-height: 96px;
+    width: 100%;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--text1);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+
   .comment-form textarea:focus {
     outline: none;
     border-color: var(--accent);
@@ -97,12 +110,12 @@
   <div class="request-box">
     <h2>Permiso de Edicion</h2>
     {% if approved_edit_request %}
-      <p class="text-small">Permiso aprobado. Ya puedes editar un comentario existente y al guardar se consumira este permiso.</p>
+      <p class="text-small">Permiso aprobado. Ya puedes editar un comentario existente y al guardar se consumirá este permiso.</p>
       {% if approved_edit_request.admin_note %}
         <p class="text-muted text-small">Nota admin: {{ approved_edit_request.admin_note }}</p>
       {% endif %}
     {% elif pending_edit_request %}
-      <p class="text-small">Tu solicitud de edicion esta pendiente desde {{ pending_edit_request.requested_at.strftime('%Y-%m-%d %H:%M') if pending_edit_request.requested_at else '-' }}.</p>
+      <p class="text-small">Tu solicitud de edición está pendiente desde {{ pending_edit_request.requested_at.strftime('%Y-%m-%d %H:%M') if pending_edit_request.requested_at else '-' }}.</p>
       {% if pending_edit_request.teacher_note %}
         <p class="text-muted text-small">Motivo enviado: {{ pending_edit_request.teacher_note }}</p>
       {% endif %}
@@ -111,49 +124,64 @@
       <form method="POST" action="{{ url_for('profesor.solicitar_edicion_comentarios', estudiante_id=estudiante.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label for="teacher_note">Motivo (opcional)</label>
-        <input id="teacher_note" name="teacher_note" class="table-select" placeholder="Ejemplo: corregir observacion por error de digitacion">
+        <input id="teacher_note" name="teacher_note" class="table-select" placeholder="Ejemplo: corregir observación por error de digitación">
         <div class="section-actions">
-          <button type="submit" class="btn-small">Solicitar permiso de edicion</button>
+          <button type="submit" class="btn-small">Solicitar permiso de edición</button>
         </div>
       </form>
     {% endif %}
   </div>
 
   <div class="request-box">
-    <h2>Solicitud de Calificacion</h2>
-    <p class="text-small">El profesor no guarda notas directo: se envian como solicitud para aprobacion del admin.</p>
+    <h2>Solicitud de Calificación</h2>
+    <p class="text-small">El profesor no guarda notas directo: se envían como solicitud para aprobación del admin.</p>
     <form method="POST" action="{{ url_for('profesor.solicitar_calificacion', estudiante_id=estudiante.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="bulk-controls" style="align-items:end;">
         <div>
           <label for="asignatura">Asignatura</label>
-          <input id="asignatura" name="asignatura" class="table-select" placeholder="Matematicas" required>
+          <select id="asignatura" name="asignatura" class="table-select" required>
+            <option value="">Selecciona</option>
+            {% for materia in asignaturas_calificacion %}
+              <option value="{{ materia }}">{{ materia }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div>
-          <label for="periodo">Periodo</label>
-          <input id="periodo" name="periodo" class="table-select" placeholder="periodo_1">
+          <label for="periodo">Período</label>
+          <select id="periodo" name="periodo" class="table-select">
+            <option value="">Sin período</option>
+            {% for value, label in periodos_calificacion %}
+              <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div>
-          <label for="anio">Ano</label>
-          <input id="anio" name="anio" type="number" class="table-select" min="1990" max="2100" value="{{ year_now }}">
+          <label for="anio">Año</label>
+          <select id="anio" name="anio" class="table-select">
+            <option value="">Sin año</option>
+            {% for year in [year_now - 1, year_now, year_now + 1] %}
+              <option value="{{ year }}" {% if year == year_now %}selected{% endif %}>{{ year }}</option>
+            {% endfor %}
+          </select>
         </div>
         <div>
-          <label for="valor">Calificacion</label>
+          <label for="valor">Calificación</label>
           <input id="valor" name="valor" type="number" class="table-select" min="0" max="100" step="0.01" placeholder="89.5" required>
         </div>
       </div>
       <div>
-        <label for="observaciones">Observaciones (opcional)</label>
-        <input id="observaciones" name="observaciones" class="table-select" placeholder="Contexto de la nota o criterio">
+        <label for="observaciones">Contexto de la nota</label>
+        <textarea id="observaciones" name="observaciones" class="grade-note-box" placeholder="Detalle del criterio, observación académica o justificación de la solicitud."></textarea>
       </div>
       <div class="section-actions">
-        <button type="submit" class="btn-small">Enviar solicitud de calificacion</button>
+        <button type="submit" class="btn-small">Enviar solicitud de calificación</button>
       </div>
     </form>
   </div>
 
   <div class="admin-section">
-    <h2>Historial de Solicitudes de Calificacion</h2>
+    <h2>Historial de Solicitudes de Calificación</h2>
     {% if grade_request_history %}
       <div class="users-table">
         <table>
@@ -161,8 +189,8 @@
             <tr>
               <th>ID</th>
               <th>Asignatura</th>
-              <th>Periodo</th>
-              <th>Ano</th>
+              <th>Período</th>
+              <th>Año</th>
               <th>Nota</th>
               <th>Estado</th>
               <th>Solicitada</th>
@@ -186,7 +214,7 @@
         </table>
       </div>
     {% else %}
-      <p class="empty-state">Aun no hay solicitudes de calificacion para este estudiante.</p>
+      <p class="empty-state">Aún no hay solicitudes de calificación para este estudiante.</p>
     {% endif %}
 
     {% if existing_grades %}
@@ -196,8 +224,8 @@
           <thead>
             <tr>
               <th>Asignatura</th>
-              <th>Periodo</th>
-              <th>Ano</th>
+              <th>Período</th>
+              <th>Año</th>
               <th>Nota</th>
               <th>Actualizada</th>
             </tr>

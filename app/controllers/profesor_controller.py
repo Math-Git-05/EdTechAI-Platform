@@ -22,6 +22,25 @@ from app.services.teacher_observation_service import upsert_teacher_observation
 
 profesor_bp = Blueprint('profesor', __name__)
 
+PERIODOS_CALIFICACION = [
+    ("periodo_1", "1er período"),
+    ("periodo_2", "2do período"),
+    ("periodo_3", "3er período"),
+    ("periodo_4", "4to período"),
+]
+ASIGNATURAS_CALIFICACION = [
+    "Español",
+    "Lenguas Extranjeras",
+    "Matemáticas",
+    "Ciencias Sociales",
+    "Ciencias Naturales",
+    "Informática",
+    "Enfermería",
+    "Comercio",
+    "Mercadeo",
+    "Administración Pública Tributaria",
+]
+
 
 def _mask_email(email: str | None) -> str:
     value = (email or "").strip()
@@ -62,6 +81,101 @@ def _sync_teacher_observation_safe(*, student_id: int, teacher_id: int, comment:
     except Exception:
         db.session.rollback()
         return False
+
+
+def _submit_grade_request_for_student(*, estudiante: User) -> tuple[bool, str]:
+    asignatura = (request.form.get("asignatura") or "").strip()
+    periodo = (request.form.get("periodo") or "").strip() or None
+    anio_raw = (request.form.get("anio") or "").strip()
+    valor_raw = (request.form.get("valor") or "").strip()
+    observaciones = (request.form.get("observaciones") or "").strip() or None
+
+    if asignatura not in set(ASIGNATURAS_CALIFICACION):
+        return False, "Selecciona una asignatura válida."
+    if periodo and periodo not in {item[0] for item in PERIODOS_CALIFICACION}:
+        return False, "Selecciona un período válido."
+
+    try:
+        valor = float(valor_raw)
+    except (TypeError, ValueError):
+        return False, "La calificación debe ser numérica."
+    if valor < 0 or valor > 100:
+        return False, "La calificación debe estar entre 0 y 100."
+
+    anio = None
+    if anio_raw:
+        try:
+            anio = int(anio_raw)
+        except ValueError:
+            return False, "El año de la calificación es inválido."
+        if anio < 1990 or anio > 2100:
+            return False, "El año de la calificación está fuera de rango."
+
+    existing_grade = (
+        Calificacion.query.filter_by(
+            estudiante_id=estudiante.id,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+        )
+        .order_by(Calificacion.fecha_actualizacion.desc())
+        .first()
+    )
+
+    pending = (
+        GradeChangeRequest.query.filter_by(
+            profesor_id=current_user.id,
+            estudiante_id=estudiante.id,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+            status="pendiente",
+        )
+        .order_by(GradeChangeRequest.requested_at.desc())
+        .first()
+    )
+    if pending:
+        pending.valor = valor
+        pending.observaciones = observaciones
+        pending.calificacion_id = existing_grade.id if existing_grade else None
+        pending.requested_at = db.func.current_timestamp()
+        db.session.add(pending)
+        db.session.commit()
+        request_id = pending.id
+        message = "Solicitud de calificación pendiente actualizada."
+    else:
+        new_request = GradeChangeRequest(
+            profesor_id=current_user.id,
+            estudiante_id=estudiante.id,
+            calificacion_id=existing_grade.id if existing_grade else None,
+            asignatura=asignatura,
+            periodo=periodo,
+            anio=anio,
+            valor=valor,
+            observaciones=observaciones,
+            status="pendiente",
+        )
+        db.session.add(new_request)
+        db.session.flush()
+        request_id = new_request.id
+        db.session.commit()
+        message = "Solicitud de calificación enviada al administrador."
+
+    log_audit_event(
+        action="profesor.grade_request.created",
+        actor_user_id=current_user.id,
+        target_type="grade_request",
+        target_id=request_id,
+        metadata={
+            "estudiante_id": estudiante.id,
+            "asignatura": asignatura,
+            "periodo": periodo,
+            "anio": anio,
+            "valor": valor,
+        },
+    )
+    db.session.commit()
+    return True, message
 
 @profesor_bp.route('/')
 @login_required
@@ -170,6 +284,9 @@ def index():
         evaluaciones_por_estudiante=evaluaciones_por_estudiante,
         allow_professor_export_csv=allow_professor_export_csv,
         pending_grade_requests=pending_grade_requests,
+        periodos_calificacion=PERIODOS_CALIFICACION,
+        asignaturas_calificacion=ASIGNATURAS_CALIFICACION,
+        year_options=[datetime.utcnow().year - 1, datetime.utcnow().year, datetime.utcnow().year + 1],
     )
 
 
@@ -267,6 +384,34 @@ def export_csv(dataset: str):
     )
     db.session.commit()
     return _csv_response(filename=filename, fieldnames=headers, rows=rows)
+
+
+@profesor_bp.route("/calificaciones/solicitar", methods=["POST"])
+@login_required
+def solicitar_calificacion_panel():
+    if current_user.role != "profesor":
+        flash("Este panel está disponible solo para profesores.", "warning")
+        return redirect(url_for("dashboard.index"))
+
+    estudiante_id_raw = (request.form.get("estudiante_id") or "").strip()
+    try:
+        estudiante_id = int(estudiante_id_raw)
+    except (TypeError, ValueError):
+        flash("Selecciona un estudiante válido para la solicitud.", "warning")
+        return redirect(url_for("profesor.index"))
+
+    estudiante = User.query.filter_by(
+        id=estudiante_id,
+        role="estudiante",
+        profesor_id=current_user.id,
+    ).first()
+    if not estudiante:
+        flash("No puedes solicitar calificaciones para ese estudiante.", "warning")
+        return redirect(url_for("profesor.index"))
+
+    ok, message = _submit_grade_request_for_student(estudiante=estudiante)
+    flash(message, "success" if ok else "warning")
+    return redirect(url_for("profesor.index"))
 
 
 @profesor_bp.route("/perfil", methods=["GET", "POST"])
@@ -498,6 +643,8 @@ def comentarios_estudiante(estudiante_id):
         grade_request_history=grade_request_history,
         existing_grades=existing_grades,
         year_now=datetime.utcnow().year,
+        periodos_calificacion=PERIODOS_CALIFICACION,
+        asignaturas_calificacion=ASIGNATURAS_CALIFICACION,
     )
 
 
@@ -571,7 +718,7 @@ def solicitar_edicion_comentarios(estudiante_id):
 @login_required
 def solicitar_calificacion(estudiante_id):
     if current_user.role != "profesor":
-        flash("Este panel esta disponible solo para profesores.", "warning")
+        flash("Este panel está disponible solo para profesores.", "warning")
         return redirect(url_for("dashboard.index"))
 
     estudiante = User.query.filter_by(
@@ -582,95 +729,6 @@ def solicitar_calificacion(estudiante_id):
     if not estudiante:
         flash("No puedes solicitar calificaciones para ese estudiante.", "warning")
         return redirect(url_for("profesor.index"))
-
-    asignatura = (request.form.get("asignatura") or "").strip()
-    periodo = (request.form.get("periodo") or "").strip() or None
-    anio_raw = (request.form.get("anio") or "").strip()
-    valor_raw = (request.form.get("valor") or "").strip()
-    observaciones = (request.form.get("observaciones") or "").strip() or None
-
-    if not asignatura:
-        flash("La asignatura es obligatoria.", "warning")
-        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
-
-    try:
-        valor = float(valor_raw)
-    except (TypeError, ValueError):
-        flash("La calificacion debe ser numerica.", "warning")
-        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
-    if valor < 0 or valor > 100:
-        flash("La calificacion debe estar entre 0 y 100.", "warning")
-        return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
-
-    anio = None
-    if anio_raw:
-        try:
-            anio = int(anio_raw)
-        except ValueError:
-            flash("El ano de la calificacion es invalido.", "warning")
-            return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))
-
-    existing_grade = (
-        Calificacion.query.filter_by(
-            estudiante_id=estudiante.id,
-            asignatura=asignatura,
-            periodo=periodo,
-            anio=anio,
-        )
-        .order_by(Calificacion.fecha_actualizacion.desc())
-        .first()
-    )
-
-    pending = (
-        GradeChangeRequest.query.filter_by(
-            profesor_id=current_user.id,
-            estudiante_id=estudiante.id,
-            asignatura=asignatura,
-            periodo=periodo,
-            anio=anio,
-            status="pendiente",
-        )
-        .order_by(GradeChangeRequest.requested_at.desc())
-        .first()
-    )
-    if pending:
-        pending.valor = valor
-        pending.observaciones = observaciones
-        pending.calificacion_id = existing_grade.id if existing_grade else None
-        pending.requested_at = db.func.current_timestamp()
-        db.session.add(pending)
-        flash("Solicitud de calificacion pendiente actualizada.", "info")
-        request_id = pending.id
-    else:
-        new_request = GradeChangeRequest(
-            profesor_id=current_user.id,
-            estudiante_id=estudiante.id,
-            calificacion_id=existing_grade.id if existing_grade else None,
-            asignatura=asignatura,
-            periodo=periodo,
-            anio=anio,
-            valor=valor,
-            observaciones=observaciones,
-            status="pendiente",
-        )
-        db.session.add(new_request)
-        db.session.flush()
-        request_id = new_request.id
-        flash("Solicitud de calificacion enviada al administrador.", "success")
-    db.session.commit()
-
-    log_audit_event(
-        action="profesor.grade_request.created",
-        actor_user_id=current_user.id,
-        target_type="grade_request",
-        target_id=request_id,
-        metadata={
-            "estudiante_id": estudiante.id,
-            "asignatura": asignatura,
-            "periodo": periodo,
-            "anio": anio,
-            "valor": valor,
-        },
-    )
-    db.session.commit()
+    ok, message = _submit_grade_request_for_student(estudiante=estudiante)
+    flash(message, "success" if ok else "warning")
     return redirect(url_for("profesor.comentarios_estudiante", estudiante_id=estudiante.id))

@@ -115,6 +115,36 @@
     gap: 8px;
     margin-top: 6px;
   }
+
+  .audit-bar-row {
+    margin-bottom: 10px;
+  }
+
+  .audit-bar-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 5px;
+  }
+
+  .audit-bar-track {
+    height: 10px;
+    border-radius: 999px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .audit-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #16a34a, #22c55e);
+    transition: width 1s ease;
+  }
 </style>
 {% endblock %}
 
@@ -228,6 +258,27 @@
         </div>
       </div>
     </div>
+
+    <div class="metric-card">
+      <h3>Eventos de auditoría más comunes</h3>
+      {% if top_audit_actions %}
+        {% set audit_max = (top_audit_actions[0].count if top_audit_actions[0].count > 0 else 1) %}
+        {% for item in top_audit_actions %}
+          {% set audit_pct = (item.count / audit_max * 100) %}
+          <div class="audit-bar-row">
+            <div class="audit-bar-head">
+              <span>{{ item.action }}</span>
+              <strong>{{ item.count }}</strong>
+            </div>
+            <div class="audit-bar-track">
+              <div class="audit-bar-fill js-audit-fill" data-target="{{ '%.2f'|format(audit_pct) }}"></div>
+            </div>
+          </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty-state">Aún no hay datos suficientes de auditoría para graficar.</p>
+      {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -236,8 +287,13 @@
 <script>
   (function () {
     const fills = Array.from(document.querySelectorAll('.js-fill'));
+    const auditFills = Array.from(document.querySelectorAll('.js-audit-fill'));
     window.requestAnimationFrame(function () {
       fills.forEach((fill) => {
+        const target = Math.max(0, Math.min(100, Number(fill.dataset.target || '0')));
+        fill.style.width = target.toFixed(2) + '%';
+      });
+      auditFills.forEach((fill) => {
         const target = Math.max(0, Math.min(100, Number(fill.dataset.target || '0')));
         fill.style.width = target.toFixed(2) + '%';
       });

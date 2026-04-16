@@ -96,9 +96,11 @@ SETTING_ALLOW_PROF_CSV = "allow_professor_export_csv"
 SETTING_DEMO_MODE = "demo_mode_enabled"
 SETTING_MAINTENANCE_MODE = "maintenance_mode_enabled"
 SETTING_AUDIT_ENABLED = "enable_audit_logs"
+SETTING_AUDIT_VISIBLE_LIMIT = "audit_log_visible_limit"
 SETTING_EVAL_WINDOW_ENABLED = "evaluation_window_enabled"
 SETTING_EVAL_WINDOW_START = "evaluation_window_start"
 SETTING_EVAL_WINDOW_END = "evaluation_window_end"
+SETTING_MAINTENANCE_ETA = "maintenance_eta_text"
 
 
 def _check_admin_access():
@@ -157,6 +159,17 @@ def _normalize_datetime_local(value: str | None) -> str | None:
         return parsed.replace(second=0, microsecond=0).isoformat(timespec="minutes")
     except ValueError:
         return None
+
+
+def _safe_visible_limit(raw_value: str | int | None, default: int = 25) -> int:
+    allowed = {25, 30, 50, 100, 200}
+    try:
+        parsed = int(str(raw_value or "").strip())
+    except (TypeError, ValueError):
+        parsed = default
+    if parsed not in allowed:
+        return default
+    return parsed
 
 
 def _evaluation_window_snapshot() -> dict[str, object]:
@@ -769,6 +782,23 @@ def _dashboard_context():
     for solicitud in solicitudes_perfil:
         solicitud.parsed_payload = _load_request_payload(solicitud)
 
+    top_audit_actions = []
+    try:
+        top_audit_actions_raw = (
+            db.session.query(AuditLog.action, func.count(AuditLog.id).label("total"))
+            .group_by(AuditLog.action)
+            .order_by(func.count(AuditLog.id).desc())
+            .limit(6)
+            .all()
+        )
+        top_audit_actions = [
+            {"action": str(row[0] or "unknown"), "count": int(row[1] or 0)}
+            for row in top_audit_actions_raw
+        ]
+    except Exception:
+        db.session.rollback()
+        top_audit_actions = []
+
     today = datetime.utcnow().date()
     first_day_current_month = today.replace(day=1)
     month_starts: list[date] = []
@@ -823,6 +853,7 @@ def _dashboard_context():
         "solicitudes_calificacion_count": len(solicitudes_calificacion),
         "eval_trend_labels": trend_labels,
         "eval_trend_values": trend_values,
+        "top_audit_actions": top_audit_actions,
         "submissions_sheet_url": current_app.config.get("TALLY_SUBMISSIONS_SHEET_URL"),
     }
 
@@ -897,7 +928,9 @@ def specialty_controls():
         demo_mode_enabled = _bool_from_form("demo_mode_enabled", default=False)
         maintenance_mode_enabled = _bool_from_form("maintenance_mode_enabled", default=False)
         audit_logs_enabled = _bool_from_form("enable_audit_logs", default=True)
+        audit_visible_limit = _safe_visible_limit(request.form.get("audit_log_visible_limit"), default=25)
         eval_window_enabled = _bool_from_form("evaluation_window_enabled", default=False)
+        maintenance_eta_text = (request.form.get("maintenance_eta_text") or "").strip() or None
 
         eval_window_start = _normalize_datetime_local(request.form.get("evaluation_window_start"))
         eval_window_end = _normalize_datetime_local(request.form.get("evaluation_window_end"))
@@ -911,9 +944,11 @@ def specialty_controls():
         set_bool_setting(SETTING_DEMO_MODE, demo_mode_enabled)
         set_bool_setting(SETTING_MAINTENANCE_MODE, maintenance_mode_enabled)
         set_bool_setting(SETTING_AUDIT_ENABLED, audit_logs_enabled)
+        set_setting(SETTING_AUDIT_VISIBLE_LIMIT, audit_visible_limit)
         set_bool_setting(SETTING_EVAL_WINDOW_ENABLED, eval_window_enabled)
         set_setting(SETTING_EVAL_WINDOW_START, eval_window_start)
         set_setting(SETTING_EVAL_WINDOW_END, eval_window_end)
+        set_setting(SETTING_MAINTENANCE_ETA, maintenance_eta_text)
         db.session.commit()
 
         log_audit_event(
@@ -928,9 +963,11 @@ def specialty_controls():
                 "demo_mode_enabled": demo_mode_enabled,
                 "maintenance_mode_enabled": maintenance_mode_enabled,
                 "enable_audit_logs": audit_logs_enabled,
+                "audit_log_visible_limit": audit_visible_limit,
                 "evaluation_window_enabled": eval_window_enabled,
                 "evaluation_window_start": eval_window_start,
                 "evaluation_window_end": eval_window_end,
+                "maintenance_eta_text": maintenance_eta_text,
             },
         )
         db.session.commit()
@@ -943,11 +980,13 @@ def specialty_controls():
     demo_mode_enabled = get_bool_setting(SETTING_DEMO_MODE, default=False)
     maintenance_mode_enabled = get_bool_setting(SETTING_MAINTENANCE_MODE, default=False)
     audit_logs_enabled = get_bool_setting(SETTING_AUDIT_ENABLED, default=True)
+    audit_visible_limit = _safe_visible_limit(get_setting(SETTING_AUDIT_VISIBLE_LIMIT, "25"), default=25)
     eval_window_enabled = get_bool_setting(SETTING_EVAL_WINDOW_ENABLED, default=False)
     eval_window_start = (get_setting(SETTING_EVAL_WINDOW_START, "") or "").strip()
     eval_window_end = (get_setting(SETTING_EVAL_WINDOW_END, "") or "").strip()
+    maintenance_eta_text = (get_setting(SETTING_MAINTENANCE_ETA, "") or "").strip()
     window_snapshot = _evaluation_window_snapshot()
-    audit_recent = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(20).all()
+    audit_recent = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(audit_visible_limit).all()
 
     return render_template(
         "dashboard/admin_specialty_controls.html",
@@ -958,9 +997,11 @@ def specialty_controls():
         demo_mode_enabled=demo_mode_enabled,
         maintenance_mode_enabled=maintenance_mode_enabled,
         enable_audit_logs=audit_logs_enabled,
+        audit_log_visible_limit=audit_visible_limit,
         evaluation_window_enabled=eval_window_enabled,
         evaluation_window_start=eval_window_start,
         evaluation_window_end=eval_window_end,
+        maintenance_eta_text=maintenance_eta_text,
         evaluation_window_status=window_snapshot,
         audit_recent=audit_recent,
         **_dashboard_context(),
@@ -1296,11 +1337,32 @@ def export_csv(dataset: str):
 def audit_logs():
     if not _check_admin_access():
         return redirect(url_for("dashboard.index"))
-    logs = AuditLog.query.order_by(AuditLog.created_at.desc()).limit(500).all()
+    configured_limit = _safe_visible_limit(get_setting(SETTING_AUDIT_VISIBLE_LIMIT, "25"), default=25)
+    limit = _safe_visible_limit(request.args.get("limit"), default=configured_limit)
+    try:
+        page = max(1, int((request.args.get("page") or "1").strip()))
+    except (TypeError, ValueError):
+        page = 1
+
+    total_logs = AuditLog.query.count()
+    offset = (page - 1) * limit
+    logs = (
+        AuditLog.query.order_by(AuditLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    has_prev = page > 1
+    has_next = offset + len(logs) < total_logs
     return render_template(
         "dashboard/admin_audit_logs.html",
         admin_active="audit",
         audit_logs=logs,
+        audit_total=total_logs,
+        audit_page=page,
+        audit_limit=limit,
+        audit_has_prev=has_prev,
+        audit_has_next=has_next,
         **_dashboard_context(),
     )
 

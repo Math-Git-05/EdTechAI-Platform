@@ -115,7 +115,12 @@
 
   {% if maintenance_mode_enabled and (not current_user.is_authenticated or current_user.role != 'admin') %}
     <div class="flash-container" style="padding-top:10px;">
-      <div class="alert alert-warning">Maintenance Mode activo: acceso limitado temporalmente.</div>
+      <div class="alert alert-warning">
+        Maintenance Mode activo: acceso limitado temporalmente.
+        {% if maintenance_eta_text %}
+          Reapertura estimada: {{ maintenance_eta_text }}.
+        {% endif %}
+      </div>
     </div>
   {% endif %}
   {% if demo_mode_enabled %}
