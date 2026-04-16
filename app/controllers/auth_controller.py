@@ -208,7 +208,11 @@ def _build_teacher_profile_from_form(form):
 
 
 def _build_external_url(endpoint: str, **kwargs) -> str:
-    base = current_app.config.get("APP_BASE_URL", "").rstrip("/")
+    base = (
+        current_app.config.get("PUBLIC_BASE_URL")
+        or current_app.config.get("APP_BASE_URL")
+        or ""
+    ).rstrip("/")
     relative = url_for(endpoint, **kwargs)
     if base:
         return f"{base}{relative}"
